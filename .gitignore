@@ -1,0 +1,28 @@
+# Entornos Virtuales
+.venv/
+venv/
+env/
+
+# Archivos compilados de Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Base de datos y temporales
+backend/registros.db
+backend/pdfs_de_prueba/*.pdf
+*.sqlite3
+temp_*
+
+# Archivos de entorno y SO
+.env
+.DS_Store
+.vscode/
+

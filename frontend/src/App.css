@@ -1,0 +1,602 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --primary: #53358D;       /* Morado EnerBit */
+  --primary-hover: #422a70;
+  --secondary: #f97316;     /* Naranja EnerBit (complementario) */
+  
+  --bg-sidebar: #ffffff;
+  --bg-main: #f8fafc;
+  --surface: #ffffff;
+  
+  --border: #e2e8f0;
+  --border-focus: #cbd5e1;
+  
+  --text-main: #1e293b;
+  --text-muted: #64748b;
+  
+  --radius: 10px;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* LAYOUT PRINCIPAL */
+.app-layout {
+  min-height: 100vh;
+  width: 100%;
+  overflow-x: hidden;
+  text-align: left; /* Fuerza alineación izquierda ignorando index.css default */
+}
+
+/* SIDEBAR */
+.sidebar {
+  width: 250px; /* Reducido para no desperdiciar espacio */
+  background-color: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  height: 100vh;
+  z-index: 50;
+  box-shadow: var(--shadow-sm);
+}
+
+.sidebar-brand {
+  height: 70px; /* Reducimos altura para empatar con header */
+  display: flex;
+  align-items: center;
+  justify-content: center; /* Centramos el logo horizontalmente */
+  border-bottom: 1px solid var(--border);
+  background: white;
+}
+
+.brand-logo {
+  max-width: 130px;
+  max-height: 40px;
+  object-fit: contain;
+}
+
+.sidebar-nav {
+  padding: 2rem 1rem;
+  flex-grow: 1;
+}
+
+.sidebar-nav ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.nav-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.8rem 1rem;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  font-weight: 500;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.nav-btn:hover {
+  background-color: #f1f5f9;
+  color: var(--text-main);
+}
+
+.nav-btn.active {
+  background-color: rgba(83, 53, 141, 0.08); /* Morado al 8% */
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.nav-btn svg {
+  color: inherit;
+}
+
+/* MAIN CONTENT */
+.main-wrapper {
+  margin-left: 250px;
+  width: calc(100% - 250px);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--bg-main);
+}
+
+/* LA CABECERA MORADA */
+.top-header {
+  height: 70px;
+  background-color: var(--primary); /* Morado puro EnerBit */
+  display: flex;
+  align-items: center;
+  padding: 0 3rem;
+  color: white;
+  box-shadow: var(--shadow-sm);
+  z-index: 40;
+}
+
+.header-content {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.header-user {
+  font-size: 0.9rem;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 0.4rem 1rem;
+  border-radius: 20px;
+  font-weight: 500;
+}
+
+/* LÍMITE DE ANCHO EN EL CONTENIDO (Solución UX 1) */
+.content-container {
+  padding: 3rem;
+  flex-grow: 1;
+}
+
+.content-fluid-limit {
+  max-width: 1600px; /* Aumentado para que la tabla tenga suficiente espacio horizontal */
+  margin: 0 auto; /* Centrado homogéneo manteniendo el ancho límite */
+}
+
+/* SECTIONS & COMPONENTS */
+.module-title {
+  margin-bottom: 2rem;
+}
+
+.module-title h2 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--primary); /* Morado EnerBit */
+  margin-bottom: 0.5rem;
+}
+
+.text-subtitle {
+  color: var(--text-muted);
+  font-size: 1.05rem;
+}
+
+.upload-section {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 2.5rem;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+  margin-bottom: 3.5rem;
+}
+
+.metadata-container {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 200px;
+}
+
+.input-group label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.input-group select, .input-group input {
+  padding: 0.8rem 1rem;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  font-size: 1rem;
+  font-family: inherit;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.input-group select:focus, .input-group input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(83, 53, 141, 0.1);
+}
+
+.drag-file-element {
+  border: 2px dashed #cbd5e1;
+  border-radius: var(--radius);
+  padding: 3rem 1rem;
+  text-align: center;
+  transition: all 0.3s ease;
+  position: relative;
+  background: #f8fafc;
+  cursor: pointer;
+  margin-bottom: 1.5rem;
+}
+
+.drag-file-element.drag-active {
+  border-color: var(--primary);
+  background: rgba(83, 53, 141, 0.05);
+}
+
+.upload-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.upload-icon {
+  color: var(--primary);
+  margin-bottom: 0.5rem;
+}
+
+input[type="file"] {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.upload-content .ul-link {
+  color: var(--primary);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.file-name {
+  font-weight: 400;
+  color: var(--text-main);
+}
+
+.file-name b { color: var(--primary); }
+
+.btn {
+  width: 100%;
+  padding: 1rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.3s, transform 0.1s;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 54px;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: white;
+}
+
+.btn-primary:not(:disabled):hover {
+  background: var(--primary-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-primary:disabled {
+  background: #cbd5e1;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.loader {
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(255,255,255,0.3);
+  border-radius: 50%;
+  border-top-color: white;
+  animation: spin 1s ease-in-out infinite;
+}
+
+/* DATA TABLE SECTION */
+.data-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 2rem;
+}
+
+.data-section h3 {
+  font-size: 1.5rem;
+  color: var(--primary); /* Morado EnerBit */
+  margin-bottom: 0.2rem;
+  font-weight: 700;
+}
+
+.data-header-row .text-subtitle {
+  margin-bottom: 0 !important;
+}
+
+.filters-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: white;
+  padding: 0.6rem 1.2rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+.filter-label-group {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-right: 0.2rem;
+}
+
+.filter-select {
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-focus);
+  background: white;
+  font-size: 0.9rem;
+  color: var(--text-main);
+  outline: none;
+  cursor: pointer;
+}
+
+.filter-select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(83, 53, 141, 0.1);
+}
+
+.grouped-documents-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.document-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden; /* Corta bordes rectos de tablas internas */
+}
+
+.document-card-header {
+  background: #f1f5f9;
+  padding: 1.2rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.doc-meta {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.doc-operator {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.doc-period {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  background: white;
+  padding: 0.3rem 0.8rem;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+}
+
+.doc-badge {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  background: #e2e8f0;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.document-card-body {
+  padding: 0;
+}
+
+.local-table-wrapper {
+  overflow-x: auto;
+  /* Quitamos sombras extra internas */
+}
+
+.compact-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.compact-table th, .compact-table td {
+  padding: 0.9rem 1.2rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.compact-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.compact-table th {
+  background: white;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.compact-table tr {
+  transition: background 0.2s;
+}
+
+.compact-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+/* Evitar que la celda de Nivel estire toda la tabla torpemente */
+.min-w-row {
+  min-width: 250px;
+}
+
+/* TEXT UTILITIES */
+.font-medium { font-weight: 500; }
+.font-bold { font-weight: 700; }
+.text-muted { color: var(--text-muted); }
+.text-dark { color: var(--text-main); }
+.text-enerbit { color: var(--primary); }
+.text-purple { color: #8b5cf6; font-weight: 600; }
+
+/* VIEW DE CONSTRUCCIÓN */
+.construction-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 60vh;
+  text-align: center;
+  background: transparent;
+}
+
+.construction-view h2 {
+  font-size: 1.8rem;
+  margin-bottom: 0.5rem;
+  color: var(--text-main);
+  opacity: 0.4;
+}
+
+.construction-view p {
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  opacity: 0.6;
+}
+
+.cog-icon {
+  color: var(--border);
+  margin-bottom: 1.5rem;
+  animation: slow-spin 15s linear infinite;
+}
+
+.success-card {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: #f0fdf4;
+  border: 1px solid #22c55e;
+  color: #15803d;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.confirmation-card {
+  margin-bottom: 1.5rem;
+  padding: 1.5rem;
+  background: #fffbeb;
+  border: 1px solid #f59e0b;
+  border-radius: var(--radius);
+  color: #92400e;
+}
+
+.confirmation-text {
+  font-size: 1rem;
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+.confirmation-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.btn-danger {
+  background: #ef4444;
+  color: white;
+}
+
+.btn-danger:not(:disabled):hover {
+  background: #dc2626;
+  box-shadow: var(--shadow-md);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--text-main);
+  border: 1px solid var(--border-focus);
+}
+
+.btn-outline:not(:disabled):hover {
+  background: #f8fafc;
+}
+
+/* ANIMATIONS */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes slow-spin {
+  to { transform: rotate(360deg); }
+}
+
+.fade-in {
+  animation: fadeIn 0.4s ease-out both;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* RESPONSIVE LAYOUT (Ajuste para pantallas más pequeñas / colapso de Sidebar) */
+@media (max-width: 1400px) {
+  .sidebar { width: 80px; }
+  .main-wrapper { margin-left: 80px; width: calc(100% - 80px); }
+  .sidebar-brand { padding: 0 0.5rem; }
+  .brand-logo { max-width: 50px; } /* Encoge el logo */
+  .nav-btn { justify-content: center; padding: 1rem 0; gap: 0; }
+  .nav-btn .nav-text { display: none; } /* Oculta el texto, deja solo los iconos */
+  .content-container { padding: 2rem 1.5rem; }
+  .doc-meta { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+}
+
+@media (max-width: 768px) {
+  .content-container { padding: 1rem; }
+}

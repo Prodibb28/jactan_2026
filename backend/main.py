@@ -6,7 +6,23 @@ import re
 import os
 import aiofiles
 
-from database import SessionLocal, Documento, RegistroTarifario
+from database import SessionLocal, Documento, RegistroTarifario, ParametrosOperador, CargosGlobales
+from pydantic import BaseModel
+from typing import Optional
+
+class ParametrosOperadorBase(BaseModel):
+    operador_red: str
+    anio: int
+    fijabit_hogar: Optional[float] = None
+    fijabit_comercial: Optional[float] = None
+
+class CargosGlobalesBase(BaseModel):
+    anio: int
+    medida_directa_hogar: Optional[float] = None
+    medida_directa_zc: Optional[float] = None
+    medida_semi_indirecta_zc: Optional[float] = None
+    medida_directa_comercial: Optional[float] = None
+    medida_semi_indirecta_comercial: Optional[float] = None
 
 app = FastAPI()
 
@@ -210,3 +226,53 @@ def get_registros(db: Session = Depends(get_db)):
             "ot_val": reg.ot_val
         })
     return resultado
+
+# ENDPOINTS PARA PLAN ENERPRO
+@app.get("/plan-enerpro/parametros")
+def get_parametros_operador(anio: int, operador_red: str, db: Session = Depends(get_db)):
+    record = db.query(ParametrosOperador).filter(ParametrosOperador.anio == anio, ParametrosOperador.operador_red == operador_red).first()
+    return record
+
+@app.post("/plan-enerpro/parametros")
+def save_parametros_operador(data: ParametrosOperadorBase, db: Session = Depends(get_db)):
+    record = db.query(ParametrosOperador).filter(ParametrosOperador.anio == data.anio, ParametrosOperador.operador_red == data.operador_red).first()
+    if record:
+        record.fijabit_hogar = data.fijabit_hogar
+        record.fijabit_comercial = data.fijabit_comercial
+    else:
+        record = ParametrosOperador(
+            operador_red=data.operador_red,
+            anio=data.anio,
+            fijabit_hogar=data.fijabit_hogar,
+            fijabit_comercial=data.fijabit_comercial
+        )
+        db.add(record)
+    db.commit()
+    return {"status": "success"}
+
+@app.get("/plan-enerpro/globales")
+def get_cargos_globales(anio: int, db: Session = Depends(get_db)):
+    record = db.query(CargosGlobales).filter(CargosGlobales.anio == anio).first()
+    return record
+
+@app.post("/plan-enerpro/globales")
+def save_cargos_globales(data: CargosGlobalesBase, db: Session = Depends(get_db)):
+    record = db.query(CargosGlobales).filter(CargosGlobales.anio == data.anio).first()
+    if record:
+        record.medida_directa_hogar = data.medida_directa_hogar
+        record.medida_directa_zc = data.medida_directa_zc
+        record.medida_semi_indirecta_zc = data.medida_semi_indirecta_zc
+        record.medida_directa_comercial = data.medida_directa_comercial
+        record.medida_semi_indirecta_comercial = data.medida_semi_indirecta_comercial
+    else:
+        record = CargosGlobales(
+            anio=data.anio,
+            medida_directa_hogar=data.medida_directa_hogar,
+            medida_directa_zc=data.medida_directa_zc,
+            medida_semi_indirecta_zc=data.medida_semi_indirecta_zc,
+            medida_directa_comercial=data.medida_directa_comercial,
+            medida_semi_indirecta_comercial=data.medida_semi_indirecta_comercial
+        )
+        db.add(record)
+    db.commit()
+    return {"status": "success"}

@@ -567,6 +567,17 @@ input[type="file"] {
   background: #f8fafc;
 }
 
+.btn-orange {
+  background: #EC7104;
+  color: white;
+  border: 1px solid #EC7104;
+}
+
+.btn-orange:not(:disabled):hover {
+  background: #d16303;
+  box-shadow: var(--shadow-md);
+}
+
 /* ANIMATIONS */
 @keyframes spin {
   to { transform: rotate(360deg); }
@@ -599,4 +610,131 @@ input[type="file"] {
 
 @media (max-width: 768px) {
   .content-container { padding: 1rem; }
+}
+
+/* ========================================= */
+/* SEGMENTED CONTROL / SUB-NAV FOR ENERPRO  */
+/* ========================================= */
+.segmented-control {
+  display: flex;
+  align-items: center;
+  background-color: #F1F3F5;
+  border-radius: 9999px; /* Pill shape */
+  padding: 6px;
+  width: fit-content;
+  margin: 0 auto 2.5rem auto;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+  gap: 0.5rem;
+}
+
+.segmented-btn {
+  background: transparent;
+  border: none;
+  border-radius: 9999px;
+  padding: 0.8rem 2rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #6B7280;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 200px;
+}
+
+.segmented-btn:hover:not(.active) {
+  color: var(--primary);
+  background: rgba(83, 53, 141, 0.05);
+}
+
+.segmented-btn.active {
+  background-color: var(--primary);
+  color: white;
+  box-shadow: 0 4px 10px rgba(83, 53, 141, 0.25);
+}
+
+/* ========================================= */
+/* FORM SECTION ENERPRO                      */
+/* ========================================= */
+.form-section {
+  width: 100%;
+  margin: 0 auto;
+}
+
+.form-card {
+  background: transparent;
+  text-align: left;
+}
+
+.market-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 2.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  margin-bottom: 2rem;
+}
+
+.sub-market-card {
+  background: #F9FAFB;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.sub-market-card + .sub-market-card {
+  margin-top: 15px;
+}
+
+.sub-market-header {
+  margin-bottom: 1.5rem;
+  border-bottom: 1px dashed #D1D5DB;
+  padding-bottom: 1rem;
+}
+
+.section-title-box {
+  display: flex;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid rgba(83, 53, 141, 0.1);
+}
+
+.section-title-box h3 {
+  color: var(--primary);
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.5rem;
+  align-items: end;
+}
+
+.input-prefix {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 48px;
+}
+
+.input-prefix .prefix {
+  position: absolute;
+  left: 1rem;
+  color: #6B7280;
+  font-weight: 500;
+}
+
+.input-prefix .pl-prefix {
+  padding-left: 2.2rem; /* Make room for the prefix $ */
+  height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+select.form-select {
+  height: 48px;
+  width: 100%;
+  box-sizing: border-box;
 }

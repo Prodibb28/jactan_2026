@@ -48,5 +48,31 @@ class RegistroTarifario(Base):
     # Relación inversa al documento padre
     documento = relationship("Documento", back_populates="registros")
 
+# 3. Tabla Anual Plan enerPro: Parámetros atados a Comercializadores
+class ParametrosOperador(Base):
+    __tablename__ = "parametros_operador"
+
+    id = Column(Integer, primary_key=True, index=True)
+    operador_red = Column(String, index=True) 
+    anio = Column(Integer, index=True)
+    fijabit_hogar = Column(Float, nullable=True)
+    fijabit_comercial = Column(Float, nullable=True)
+
+# 4. Tabla Anual Plan enerPro: Cargos Globales de Medición Universales
+class CargosGlobales(Base):
+    __tablename__ = "cargos_globales"
+
+    id = Column(Integer, primary_key=True, index=True)
+    anio = Column(Integer, index=True, unique=True)
+    
+    # Mercado Hogar
+    medida_directa_hogar = Column(Float, nullable=True)
+    medida_directa_zc = Column(Float, nullable=True)
+    medida_semi_indirecta_zc = Column(Float, nullable=True)
+    
+    # Mercado Comercial
+    medida_directa_comercial = Column(Float, nullable=True)
+    medida_semi_indirecta_comercial = Column(Float, nullable=True)
+
 # Crea las tablas
 Base.metadata.create_all(bind=engine)

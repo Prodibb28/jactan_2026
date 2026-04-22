@@ -3,6 +3,7 @@ import './App.css';
 
 function App() {
   const [activeTab, setActiveTab] = useState('upload'); // 'upload', 'resumen', 'config'
+  const [uploadSubTab, setUploadSubTab] = useState('operador_red'); // 'operador_red' , 'enerpro'
 
   // Estados del escáner PDF
   const [file, setFile] = useState(null);
@@ -14,6 +15,24 @@ function App() {
   const [operador, setOperador] = useState("Afinia");
   const [mes, setMes] = useState(new Date().getMonth() + 1);
   const [anio, setAnio] = useState(new Date().getFullYear());
+  
+  const [anioOperador, setAnioOperador] = useState(new Date().getFullYear());
+  const [anioGlobal, setAnioGlobal] = useState(new Date().getFullYear());
+  const [planOperador, setPlanOperador] = useState("Afinia");
+
+  // Estados del formulario Plan enerPro - Parámetros Operador
+  const [fijabitHogar, setFijabitHogar] = useState("");
+  const [fijabitComercial, setFijabitComercial] = useState("");
+
+  // Estados del formulario Plan enerPro - Cargos Globales
+  const [medidaDirectaHogar, setMedidaDirectaHogar] = useState("");
+  const [medidaDirectaZc, setMedidaDirectaZc] = useState("");
+  const [medidaSemiIndirectaZc, setMedidaSemiIndirectaZc] = useState("");
+  const [medidaDirectaComercial, setMedidaDirectaComercial] = useState("");
+  const [medidaSemiIndirectaComercial, setMedidaSemiIndirectaComercial] = useState("");
+
+  const [saveSuccessOp, setSaveSuccessOp] = useState(null);
+  const [saveSuccessGlobal, setSaveSuccessGlobal] = useState(null);
 
   const operadoresSoportados = ["Afinia", "Enel"];
   const meses = [
@@ -43,6 +62,80 @@ function App() {
   useEffect(() => {
     fetchRegistros();
   }, []);
+
+  // Auto-fetch de Parámetros de Operador cuando cambie el año o el operador
+  useEffect(() => {
+    fetch(`http://localhost:8000/plan-enerpro/parametros?anio=${anioOperador}&operador_red=${planOperador}`)
+      .then(res => res.json())
+      .then(json => {
+        if (json && json.fijabit_hogar !== undefined) {
+          setFijabitHogar(json.fijabit_hogar ?? "");
+          setFijabitComercial(json.fijabit_comercial ?? "");
+        } else {
+          setFijabitHogar("");
+          setFijabitComercial("");
+        }
+      })
+      .catch(() => { setFijabitHogar(""); setFijabitComercial(""); });
+  }, [anioOperador, planOperador]);
+
+  // Auto-fetch de Cargos Globales cuando cambie el año
+  useEffect(() => {
+    fetch(`http://localhost:8000/plan-enerpro/globales?anio=${anioGlobal}`)
+      .then(res => res.json())
+      .then(json => {
+        if (json && json.anio !== undefined) {
+          setMedidaDirectaHogar(json.medida_directa_hogar ?? "");
+          setMedidaDirectaZc(json.medida_directa_zc ?? "");
+          setMedidaSemiIndirectaZc(json.medida_semi_indirecta_zc ?? "");
+          setMedidaDirectaComercial(json.medida_directa_comercial ?? "");
+          setMedidaSemiIndirectaComercial(json.medida_semi_indirecta_comercial ?? "");
+        } else {
+          setMedidaDirectaHogar(""); setMedidaDirectaZc(""); setMedidaSemiIndirectaZc("");
+          setMedidaDirectaComercial(""); setMedidaSemiIndirectaComercial("");
+        }
+      })
+      .catch(() => {
+        setMedidaDirectaHogar(""); setMedidaDirectaZc(""); setMedidaSemiIndirectaZc("");
+        setMedidaDirectaComercial(""); setMedidaSemiIndirectaComercial("");
+      });
+  }, [anioGlobal]);
+
+  // Función para guardar Parámetros de Operador
+  const handleSaveParametros = () => {
+    fetch('http://localhost:8000/plan-enerpro/parametros', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        operador_red: planOperador,
+        anio: parseInt(anioOperador),
+        fijabit_hogar: fijabitHogar !== "" ? parseFloat(fijabitHogar) : null,
+        fijabit_comercial: fijabitComercial !== "" ? parseFloat(fijabitComercial) : null
+      })
+    })
+    .then(res => res.json())
+    .then(() => { setSaveSuccessOp("✓ Parámetros guardados"); setTimeout(() => setSaveSuccessOp(null), 3000); })
+    .catch(() => { setSaveSuccessOp("✗ Error al guardar"); setTimeout(() => setSaveSuccessOp(null), 3000); });
+  };
+
+  // Función para guardar Cargos Globales
+  const handleSaveGlobales = () => {
+    fetch('http://localhost:8000/plan-enerpro/globales', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        anio: parseInt(anioGlobal),
+        medida_directa_hogar: medidaDirectaHogar !== "" ? parseFloat(medidaDirectaHogar) : null,
+        medida_directa_zc: medidaDirectaZc !== "" ? parseFloat(medidaDirectaZc) : null,
+        medida_semi_indirecta_zc: medidaSemiIndirectaZc !== "" ? parseFloat(medidaSemiIndirectaZc) : null,
+        medida_directa_comercial: medidaDirectaComercial !== "" ? parseFloat(medidaDirectaComercial) : null,
+        medida_semi_indirecta_comercial: medidaSemiIndirectaComercial !== "" ? parseFloat(medidaSemiIndirectaComercial) : null
+      })
+    })
+    .then(res => res.json())
+    .then(() => { setSaveSuccessGlobal("✓ Medidas guardadas"); setTimeout(() => setSaveSuccessGlobal(null), 3000); })
+    .catch(() => { setSaveSuccessGlobal("✗ Error al guardar"); setTimeout(() => setSaveSuccessGlobal(null), 3000); });
+  };
 
   // LÓGICA DE AGRUPACIÓN (UX Mejora: Agrupar por documento)
   const groupedData = useMemo(() => {
@@ -151,11 +244,28 @@ function App() {
         <div className="tab-content fade-in">
           
           <div className="module-title">
-            <h2>Extracción Automática de Tarifas</h2>
-            <p className="text-subtitle">Motor de análisis y digitalización de documentos tarifarios expedidos por los Operadores de Red.</p>
+            <h2>Ingesta de Tarifas</h2>
+            <p className="text-subtitle">Motor de análisis y digitalización de documentos tarifarios expedidos por los Operadores de Red y configuración de planes.</p>
           </div>
 
-          <section className="upload-section">
+          <div className="segmented-control">
+            <button 
+              className={`segmented-btn ${uploadSubTab === 'operador_red' ? 'active' : ''}`}
+              onClick={() => setUploadSubTab('operador_red')}
+            >
+              Tarifas Operador de red
+            </button>
+            <button 
+              className={`segmented-btn ${uploadSubTab === 'enerpro' ? 'active' : ''}`}
+              onClick={() => setUploadSubTab('enerpro')}
+            >
+              Plan enerPro
+            </button>
+          </div>
+
+          {uploadSubTab === 'operador_red' && (
+            <>
+              <section className="upload-section fade-in">
             <div className="metadata-container">
               <div className="input-group">
                 <label>Operador de Red</label>
@@ -315,6 +425,110 @@ function App() {
               </div>
             </section>
           )}
+          </>
+          )}
+
+          {uploadSubTab === 'enerpro' && (
+            <section className="form-section fade-in">
+              <div className="form-card">
+
+                <div className="market-section">
+                  <div className="section-title-box">
+                    <h3>Mercado Residencial y Comercial</h3>
+                  </div>
+
+                  {/* Subsección 1: Específico por Operador */}
+                  <div className="sub-market-card">
+                    <div className="sub-market-header">
+                      <h4 className="text-primary font-medium">1. Parámetros por Operador (Anual)</h4>
+                      <p className="text-muted" style={{fontSize: '0.85rem', marginTop: '0.2rem'}}>Valores FijaBit atados al comercializador para la vigencia específica.</p>
+                    </div>
+                    
+                    <div className="form-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+                      <div className="input-group">
+                        <label>Vigencia (Año)</label>
+                        <select className="form-select" value={anioOperador} onChange={(e) => setAnioOperador(e.target.value)}>
+                          {Array.from({ length: 31 }, (_, i) => 2015 + i).map(y => <option key={y} value={y}>{y}</option>)}
+                        </select>
+                      </div>
+
+                      <div className="input-group">
+                        <label>Operador de Red</label>
+                        <select className="form-select" value={planOperador} onChange={(e) => setPlanOperador(e.target.value)}>
+                           {operadoresSoportados.map(op => <option key={op} value={op}>{op}</option>)}
+                        </select>
+                      </div>
+
+                      <div className="input-group">
+                        <label>FijaBit Hogar</label>
+                        <div className="input-prefix"><span className="prefix">$</span><input type="number" placeholder="0.00" className="pl-prefix" value={fijabitHogar} onChange={(e) => setFijabitHogar(e.target.value)} /></div>
+                      </div>
+
+                      <div className="input-group">
+                        <label>FijaBit Comercial</label>
+                        <div className="input-prefix"><span className="prefix">$</span><input type="number" placeholder="0.00" className="pl-prefix" value={fijabitComercial} onChange={(e) => setFijabitComercial(e.target.value)} /></div>
+                      </div>
+                    </div>
+
+                    <div className="form-actions" style={{marginTop: '1.5rem', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '1rem'}}>
+                       {saveSuccessOp && <span className="text-muted" style={{fontSize: '0.85rem'}}>{saveSuccessOp}</span>}
+                       <button className="btn btn-orange" onClick={handleSaveParametros}>Guardar Parámetros de Operador</button>
+                    </div>
+                  </div>
+
+                  {/* Subsección 2: Medidas Globales */}
+                  <div className="sub-market-card mt-4">
+                    <div className="sub-market-header">
+                      <h4 className="text-primary font-medium">2. Cargos Universales de Medida (Anuales)</h4>
+                      <p className="text-muted" style={{fontSize: '0.85rem', marginTop: '0.2rem'}}>Costos operativos regionales por año. Rigen mundialmente para todos los operadores.</p>
+                    </div>
+
+                    <div className="form-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+                      <div className="input-group">
+                        <label>Vigencia (Año)</label>
+                        <select className="form-select" value={anioGlobal} onChange={(e) => setAnioGlobal(e.target.value)}>
+                          {Array.from({ length: 31 }, (_, i) => 2015 + i).map(y => <option key={y} value={y}>{y}</option>)}
+                        </select>
+                      </div>
+
+                      <div className="input-group">
+                        <label>Medida Directa Hogar</label>
+                        <div className="input-prefix"><span className="prefix">$</span><input type="number" placeholder="0.00" className="pl-prefix" value={medidaDirectaHogar} onChange={(e) => setMedidaDirectaHogar(e.target.value)} /></div>
+                      </div>
+
+                      <div className="input-group">
+                        <label>Medida Directa ZC Hogar</label>
+                        <div className="input-prefix"><span className="prefix">$</span><input type="number" placeholder="0.00" className="pl-prefix" value={medidaDirectaZc} onChange={(e) => setMedidaDirectaZc(e.target.value)} /></div>
+                      </div>
+
+                      <div className="input-group">
+                        <label>Semi/Indirecta ZC Hogar</label>
+                        <div className="input-prefix"><span className="prefix">$</span><input type="number" placeholder="0.00" className="pl-prefix" value={medidaSemiIndirectaZc} onChange={(e) => setMedidaSemiIndirectaZc(e.target.value)} /></div>
+                      </div>
+
+                      <div className="input-group">
+                        <label>Medida Directa Comercial</label>
+                        <div className="input-prefix"><span className="prefix">$</span><input type="number" placeholder="0.00" className="pl-prefix" value={medidaDirectaComercial} onChange={(e) => setMedidaDirectaComercial(e.target.value)} /></div>
+                      </div>
+
+                      <div className="input-group">
+                        <label>Semi/Indirecta Comercial</label>
+                        <div className="input-prefix"><span className="prefix">$</span><input type="number" placeholder="0.00" className="pl-prefix" value={medidaSemiIndirectaComercial} onChange={(e) => setMedidaSemiIndirectaComercial(e.target.value)} /></div>
+                      </div>
+                    </div>
+                    
+                    <div className="form-actions" style={{marginTop: '1.5rem', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '1rem'}}>
+                       {saveSuccessGlobal && <span className="text-muted" style={{fontSize: '0.85rem'}}>{saveSuccessGlobal}</span>}
+                       <button className="btn btn-primary" onClick={handleSaveGlobales}>Guardar Medidas Globales</button>
+                    </div>
+                  </div>
+
+                </div>
+                
+              </div>
+            </section>
+          )}
+
         </div>
       );
     } else if (activeTab === 'resumen') {

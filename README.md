@@ -46,6 +46,13 @@ Sigue estos dos pasos para arrancar ambos servidores en terminales separadas.
    uvicorn main:app --reload
    ```
    *El servidor correrá exitosamente en: http://localhost:8000*
+5. ENV:
+   ```
+      OPENAI_API_KEY -> variable para realizar la conexión a OpenAI y extraer información de la factura del usuario
+      (Si necesitan nuestra API_KEY nos dicen y se las prestamos 😎)
+   ```
+   *El servidor correrá exitosamente en: http://localhost:8000*
+
 
 ### 2. Inicializar el Frontend (React + Vite)
 1. Abre una **nueva ventana/pestaña** de la terminal en la raíz del proyecto.
@@ -64,9 +71,3 @@ Sigue estos dos pasos para arrancar ambos servidores en terminales separadas.
    *La app abrirá en tu navegador (usualmente http://localhost:5173).*
 
 ---
-
-## 🔍 Notas Adicionales sobre el Algoritmo de Extracción
-La extracción de las variables núcleo de tarifas (**Generación [G], STN [T], y Restricciones [R]**) fue reconstruida para utilizar **Cajas de Coordenadas X**. Se extrae leyendo la geometría del PDF en lugar de texto plano para blindar la app contra tablas fusionadas y cruces de texto corruptos en los PDFs oficiales de resolución.
-Si un PDF en el futuro altera sus márgenes agresivamente, el ajuste deberá hacerse iterando sobre las coordenadas designadas en la función principal en `backend/main.py`.
-
-Los scripts ubicados en `test_scripts/` te sirven si necesitas imprimir matrices de coordenadas matemáticas para un nuevo operador de red distinto.

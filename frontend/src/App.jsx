@@ -87,6 +87,41 @@ function App() {
   const [simFactor, setSimFactor] = useState("1");
   const [simEsZC, setSimEsZC] = useState("No");
 
+  const simRef = useRef(null);
+
+  const exportSimulationPNG = () => {
+    if (!simRef.current) return;
+    
+    // Cambiar temporalmente el fondo para que no salga transparente si es el caso
+    const originalBackground = simRef.current.style.background;
+    simRef.current.style.background = 'white';
+    simRef.current.style.padding = '20px'; // Agregar padding para que se vea mejor en la captura
+
+    window.html2canvas(simRef.current, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+      onclone: (clonedDoc) => {
+        const el = clonedDoc.querySelector('.document-card');
+        if (el) {
+          el.style.opacity = '1';
+          el.style.visibility = 'visible';
+          el.style.animation = 'none';
+          el.style.transform = 'none';
+        }
+      }
+    }).then(canvas => {
+      simRef.current.style.background = originalBackground;
+      simRef.current.style.padding = '0px';
+
+      const link = document.createElement('a');
+      link.download = `Simulacion_enerBit_${simMercado}_${dashAnio}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    });
+  };
+
   // Estados extractor de factura
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [invoiceResult, setInvoiceResult] = useState(null);
@@ -863,6 +898,16 @@ function App() {
                   )}
                   Analizar Factura
                 </button>
+                {consumo > 0 && dashData.length > 0 && (
+                  <button 
+                    onClick={exportSimulationPNG}
+                    className="btn btn-primary"
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', padding: '0.5rem 1rem', background: '#3b82f6' }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    Exportar PNG
+                  </button>
+                )}
                 {invoiceError && <span style={{ fontSize: '0.8rem', color: '#dc2626' }}>Error: {invoiceError}</span>}
               </div>
             </div>
@@ -953,28 +998,30 @@ function App() {
               {simFactor === 1 ? "✓ Medida Directa" : simFactor > 80 ? "✓ Medida Semi/Indirecta" : ""}
             </p>
 
-            {consumo > 0 ? (
-              <div className="grouped-documents-list" style={{marginTop: '2rem'}}>
-                <article className="document-card fade-in">
-                  <div className="document-card-header">
+             {consumo > 0 ? (
+               <div className="grouped-documents-list" style={{marginTop: '2rem'}}>
+                 <article ref={simRef} className="document-card" style={{marginBottom: '0px', background: 'white', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', opacity: '1'}}>
+                  <div className="document-card-header" style={{borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem', marginBottom: '1.5rem'}}>
                     <div className="doc-meta">
-                      <span className="doc-operator">📈 Proyección de Costos: {simNivel}</span>
-                      <span className="doc-period">Basado en {consumo} kWh/mes</span>
+                      <span className="doc-operator" style={{color: '#0f172a', fontWeight: '900', fontSize: '1.1rem'}}>📈 Proyección Comercial: {simNivel}</span>
+                      <span className="doc-period" style={{color: '#334155', fontWeight: '700', background: '#f1f5f9', padding: '0.2rem 0.8rem', borderRadius: '12px'}}>
+                        Consumo: {consumo} kWh/mes
+                      </span>
                     </div>
-                    <span className="doc-badge" style={{background: '#dcfce7', color: '#166534'}}>Simulación Activa</span>
+                    <span className="doc-badge" style={{background: '#16a34a', color: 'white', fontWeight: '900', padding: '4px 12px'}}>Simulación Activa</span>
                   </div>
                   
-                  <div className="document-card-body">
-                    <div className="table-wrapper local-table-wrapper">
+                  <div className="document-card-body" style={{padding: '0px'}}>
+                    <div className="table-wrapper local-table-wrapper" style={{boxShadow: 'none', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden'}}>
                       <table className="flat-table compact-table">
-                        <thead>
+                        <thead style={{background: '#f8fafc'}}>
                           <tr>
-                            <th style={{textAlign: 'left'}}>Mes</th>
-                            <th>Tarifa {dashOR}</th>
-                            <th>Total {dashOR}</th>
-                            <th>Tarifa enerBit</th>
-                            <th>Cargo enerPro</th>
-                            <th>Total enerBit</th>
+                            <th style={{textAlign: 'left', color: '#475569', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem'}}>Mes</th>
+                            <th style={{color: '#475569', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem'}}>Tarifa {dashOR}</th>
+                            <th style={{color: '#475569', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem'}}>Total {dashOR}</th>
+                            <th style={{color: '#475569', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem'}}>Tarifa enerBit</th>
+                            <th style={{color: '#475569', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem'}}>Cargo enerPro</th>
+                            <th style={{color: '#475569', fontWeight: '800', textTransform: 'uppercase', fontSize: '0.75rem'}}>Total enerBit</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1011,29 +1058,19 @@ function App() {
                             
                             const hasDataEB = tarifaEB > 0;
                             
-                            const subtotalOR = tarifaOR * consumo;
-                            console.log({
-                              tarifaOR,
-                              tarifaEB,
-                              consumo,
-                            })
-                            const subtotalEB = hasDataEB ? tarifaEB * consumo : 0;
-                            
-                            const totalOR = subtotalOR * (1 + taxRate);
-                            const totalEB = hasDataEB ? (subtotalEB * (1 + taxRate)) + cargoFijo : 0;
-                            const ahorro = hasDataEB ? totalOR - totalEB : null;
+                            const totalOR = (tarifaOR * consumo) * (1 + taxRate);
+                            const totalEB = hasDataEB ? (tarifaEB * consumo * (1 + taxRate)) + cargoFijo : 0;
                             
                             return (
-                              <tr key={idx}>
-                                <td className="font-medium text-dark" style={{textAlign: 'left'}}>
+                              <tr key={idx} style={{borderBottom: '1px solid #f1f5f9'}}>
+                                <td className="font-medium" style={{textAlign: 'left', color: '#1e293b', fontWeight: '600'}}>
                                   {meses.find(mes => mes.num === m.mes)?.name}
                                 </td>
-                                <td>{fmt(tarifaOR)}</td>
-                                <td className="text-muted">{currency(totalOR)}</td>
-                                
-                                <td className={`text-enerbit font-bold ${!hasDataEB ? 'text-muted' : ''}`}>{hasDataEB ? fmt(tarifaEB) : "Sin datos"}</td>
-                                <td className="text-enerbit">{hasDataEB ? currency(cargoFijo) : "—"}</td>
-                                <td className="font-bold text-dark">{hasDataEB ? currency(totalEB) : "—"}</td>
+                                <td style={{color: '#64748b'}}>{fmt(tarifaOR)}</td>
+                                <td style={{color: '#64748b', fontWeight: '500'}}>{currency(totalOR)}</td>
+                                <td style={{color: '#7c3aed', fontWeight: 'bold'}}>{hasDataEB ? fmt(tarifaEB) : "Sin datos"}</td>
+                                <td style={{color: '#7c3aed'}}>{hasDataEB ? currency(cargoFijo) : "—"}</td>
+                                <td style={{color: '#1e293b', fontWeight: '800'}}>{hasDataEB ? currency(totalEB) : "—"}</td>
                               </tr>
                             );
                           })}
@@ -1045,41 +1082,36 @@ function App() {
                            return tarifaEB > 0;
                         }).length > 0 && (
                            <tfoot>
-                              <tr style={{background: '#f8fafc', fontWeight: '900', borderTop: '2px solid var(--primary)'}}>
-                                 <td colSpan="2" style={{textAlign: 'right', padding: '1.2rem', color: 'var(--primary)'}}>TOTAL ACUMULADO</td>
-                                 <td className="text-muted">
+                              <tr style={{background: '#f8fafc', fontWeight: '900', borderTop: '2px solid #e2e8f0'}}>
+                                 <td colSpan="2" style={{textAlign: 'right', padding: '1rem', color: '#475569', fontSize: '0.8rem'}}>TOTAL ACUMULADO</td>
+                                 <td style={{color: '#475569', fontSize: '0.9rem'}}>
                                     {currency(dashData.reduce((acc, m) => {
                                        const d = m.niveles?.[simNivel] || {};
                                        const isIndustrial = simMercado === "Comercial";
                                        const isZC = !isIndustrial && simEsZC === "Sí";
                                        const tarifaEB = isIndustrial ? (d.pro_comercio || 0) : (d.pro_hogar || 0);
                                        if (tarifaEB <= 0) return acc;
-                                       
                                        const paysContribution = isIndustrial || (!isZC && parseInt(simEstrato) >= 5);
                                        const taxRate = paysContribution ? 0.20 : 0.0;
                                        return acc + ((d.cot_or || 0) * consumo * (1 + taxRate));
                                     }, 0))}
                                  </td>
                                  <td colSpan="2" style={{textAlign: 'right'}}></td>
-                                 <td className="text-dark">
+                                 <td style={{color: '#1e293b', fontSize: '1rem', fontWeight: '900'}}>
                                     {currency(dashData.reduce((acc, m) => {
                                        const d = m.niveles?.[simNivel] || {};
                                        const isIndustrial = simMercado === "Comercial";
                                        const isZC = !isIndustrial && simEsZC === "Sí";
                                        const tarifaEB = isIndustrial ? (d.pro_comercio || 0) : (d.pro_hogar || 0);
                                        if (tarifaEB <= 0) return acc;
-                                       
                                        const paysContribution = isIndustrial || (!isZC && parseInt(simEstrato) >= 5);
                                        const taxRate = paysContribution ? 0.20 : 0.0;
-                                       
                                        let cargoFijo = 0;
                                        const factorNum = parseFloat(simFactor) || 0;
                                        const isIndirect = factorNum >= 80;
-
                                        if (isZC) cargoFijo = isIndirect ? (parseFloat(medidaSemiIndirectaZc) || 0) : (parseFloat(medidaDirectaZc) || 0);
                                        else if (isIndustrial) cargoFijo = isIndirect ? (parseFloat(medidaSemiIndirectaComercial) || 0) : (parseFloat(medidaDirectaComercial) || 0);
                                        else cargoFijo = parseFloat(medidaDirectaHogar) || 0;
-                                       
                                        return acc + (tarifaEB * consumo * (1 + taxRate)) + cargoFijo;
                                     }, 0))}
                                  </td>
@@ -1091,10 +1123,10 @@ function App() {
                   </div>
                 </article>
                 
-                <div style={{marginTop: '1.5rem', padding: '1.5rem', background: '#f0fdf4', borderRadius: '12px', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', gap: '1.5rem'}}>
-                   <div style={{background: '#22c55e', color: 'white', width: '56px', height: '56px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.8rem', boxShadow: '0 4px 6px rgba(34, 197, 94, 0.2)'}}>💰</div>
+                <div style={{marginTop: '1rem', padding: '1.5rem', background: '#f0fdf4', borderRadius: '12px', border: '2px solid #bbf7d0', display: 'flex', alignItems: 'center', gap: '1.5rem'}}>
+                   <div style={{background: '#22c55e', color: 'white', width: '56px', height: '56px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.8rem'}}>💰</div>
                    <div>
-                      <h4 style={{color: '#166534', margin: 0, fontSize: '1.1rem'}}>Propuesta de Valor enerBit</h4>
+                      <h4 style={{color: '#166534', margin: 0, fontSize: '1.1rem', fontWeight: '800'}}>Propuesta de Valor enerBit</h4>
                       <p style={{color: '#15803d', margin: '0.3rem 0 0 0', fontSize: '1rem', lineHeight: '1.4'}}>
                         Basado en el análisis de los meses con datos, el cliente ahorraría un promedio mensual de <strong style={{fontSize: '1.2rem'}}>{currency(dashData.filter(m => {
                            const d = m.niveles?.[simNivel] || {};

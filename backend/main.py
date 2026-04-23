@@ -417,13 +417,15 @@ def draw_simulacion_image(page_image: Image.Image, occurrence: dict, image_bytes
 
     target_width = max(1, box[2] - box[0])
     target_height = max(1, box[3] - box[1])
-    fitted_image = ImageOps.fit(
+    fitted_image = ImageOps.contain(
         simulation_image,
         (target_width, target_height),
         method=Image.Resampling.LANCZOS,
     )
+    paste_x = box[0] + (target_width - fitted_image.width) // 2
+    paste_y = box[1] + (target_height - fitted_image.height) // 2
 
-    page_image.paste(fitted_image, (box[0], box[1]), fitted_image)
+    page_image.paste(fitted_image, (paste_x, paste_y), fitted_image)
 
 def build_presentacion_pdf(
     pdf_path: Path,

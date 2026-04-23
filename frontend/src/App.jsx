@@ -89,7 +89,7 @@ function App() {
 
   const simRef = useRef(null);
 
-  const exportSimulationPNG = () => {
+  const createComercialPitch = () => {
     if (!simRef.current) return;
     
     // Cambiar temporalmente el fondo para que no salga transparente si es el caso
@@ -111,20 +111,50 @@ function App() {
           el.style.transform = 'none';
         }
       }
-    }).then(canvas => {
+    }).then(async canvas => {
       simRef.current.style.background = originalBackground;
       simRef.current.style.padding = '0px';
 
       const link = document.createElement('a');
       link.download = `Simulacion_enerBit_${simMercado}_${dashAnio}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
+      const imageDataUrl = canvas.toDataURL('image/png');
+
+      const imageBlob = await (await fetch(imageDataUrl)).blob();
+      const formData = new FormData();
+
+      const currency = (v) => v !== null && v !== undefined ? v.toLocaleString('es-CO', { style: 'currency', currency: 'COP' }) : '—';
+      const consumo = parseFloat(simConsumo) || 0;
+
+      formData.append('simulacion', imageBlob, link.download);
+      formData.append('logo', "afinia");
+      formData.append('med_d', medidaDirectaComercial);
+      formData.append('med_si', medidaSemiIndirectaComercial);
+      formData.append('gc_value', fijabitComercial);
+      formData.append('porcentaje_value', buildPercentageSave(consumo));
+      formData.append('ahorro_value', buildValuePitch(consumo, currency));
+
+      try {
+        const response = await fetch('http://localhost:8000/presentacion/reemplazar', {
+          method: 'POST',
+          body: formData,
+        });
+
+        const pdfBuffer = await response.arrayBuffer();
+        const file = new Blob([pdfBuffer], { type: "application/pdf" });
+        const fileURL = URL.createObjectURL(file);
+        const link = document.createElement("a");
+        link.href = fileURL;
+        link.download = `${new Date().getTime()}.pdf`;
+        link.click();
+        URL.revokeObjectURL(fileURL);
+      } catch (err) {
+        console.error('Error al reemplazar simulacion en presentacion:', err);
+      }
     });
   };
 
   // Estados extractor de factura
   const [invoiceLoading, setInvoiceLoading] = useState(false);
-  const [invoiceResult, setInvoiceResult] = useState(null);
   const [invoiceError, setInvoiceError] = useState(null);
   const invoiceInputRef = useRef(null);
 
@@ -132,7 +162,6 @@ function App() {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
     setInvoiceLoading(true);
-    setInvoiceResult(null);
     setInvoiceError(null);
     setSimConsumo("");
     setSimNivel("")
@@ -149,7 +178,6 @@ function App() {
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const json = await res.json();
       console.log(json)
-      setInvoiceResult(json);
       setSimConsumo(json.consumo_mes_anterior_kwh || "");
       setSimNivel(TENSION_LEVELS[json.propiedad_activo?.toUpperCase()] || "")
       setSimMercado(json.tipo_cliente === "residencial" ? "Hogar" : "Comercial");
@@ -237,6 +265,78 @@ function App() {
         setMedidaDirectaComercial(""); setMedidaSemiIndirectaComercial("");
       });
   }, [anioGlobal]);
+
+  const buildValuePitch = (consumo, currency) => {
+
+    return currency(dashData.filter(m => {
+        const d = m.niveles?.[simNivel] || {};
+        const isIndustrial = simMercado === "Comercial";
+        const tarifaEB = isIndustrial ? (d.pro_comercio || 0) : (d.pro_hogar || 0);
+        return tarifaEB > 0;
+    }).reduce((acc, m) => {
+        const d = m.niveles?.[simNivel] || {};
+        const isIndustrial = simMercado === "Comercial";
+        const isZC = !isIndustrial && simEsZC === "Sí";
+        const paysContribution = isIndustrial || (!isZC && parseInt(simEstrato) >= 5);
+        const taxRate = paysContribution ? 0.20 : 0.0;
+        
+        const tarifaOR = d.cot_or || 0;
+        const tarifaEB = isIndustrial ? (d.pro_comercio || 0) : (d.pro_hogar || 0);
+        
+        const subtotalOR = (tarifaOR * consumo) * (1 + taxRate);
+        
+        let cargoFijo = 0;
+        const factorNum = parseFloat(simFactor) || 0;
+        const isIndirect = factorNum >= 80;
+
+        if (isZC) cargoFijo = isIndirect ? (parseFloat(medidaSemiIndirectaZc) || 0) : (parseFloat(medidaDirectaZc) || 0);
+        else if (isIndustrial) cargoFijo = isIndirect ? (parseFloat(medidaSemiIndirectaComercial) || 0) : (parseFloat(medidaDirectaComercial) || 0);
+        else cargoFijo = parseFloat(medidaDirectaHogar) || 0;
+
+        const subtotalEB = (tarifaEB * consumo * (1 + taxRate)) + cargoFijo;
+        return acc + (subtotalOR - subtotalEB);
+    }, 0) / (dashData.filter(m => {
+        const d = m.niveles?.[simNivel] || {};
+        const isIndustrial = simMercado === "Comercial";
+        const tarifaEB = isIndustrial ? (d.pro_comercio || 0) : (d.pro_hogar || 0);
+        return tarifaEB > 0;
+    }).length || 1))
+
+  }
+
+  const buildPercentageSave = (consumo) => {
+    const totalOR = dashData.reduce((acc, m) => {
+    const d = m.niveles?.[simNivel] || {};
+    const isIndustrial = simMercado === "Comercial";
+    const isZC = !isIndustrial && simEsZC === "Sí";
+    const tarifaEB = isIndustrial ? (d.pro_comercio || 0) : (d.pro_hogar || 0);
+    if (tarifaEB <= 0) return acc;
+    const paysContribution = isIndustrial || (!isZC && parseInt(simEstrato) >= 5);
+    const taxRate = paysContribution ? 0.20 : 0.0;
+    return acc + ((d.cot_or || 0) * consumo * (1 + taxRate));
+  }, 0);
+  const totalEB = dashData.reduce((acc, m) => {
+    const d = m.niveles?.[simNivel] || {};
+    const isIndustrial = simMercado === "Comercial";
+    const isZC = !isIndustrial && simEsZC === "Sí";
+    const tarifaEB = isIndustrial ? (d.pro_comercio || 0) : (d.pro_hogar || 0);
+    if (tarifaEB <= 0) return acc;
+    
+    const paysContribution = isIndustrial || (!isZC && parseInt(simEstrato) >= 5);
+    const taxRate = paysContribution ? 0.20 : 0.0;
+    
+    let cargoFijo = 0;
+    const factorNum = parseFloat(simFactor) || 0;
+    const isIndirect = factorNum >= 80;
+
+    if (isZC) cargoFijo = isIndirect ? (parseFloat(medidaSemiIndirectaZc) || 0) : (parseFloat(medidaDirectaZc) || 0);
+    else if (isIndustrial) cargoFijo = isIndirect ? (parseFloat(medidaSemiIndirectaComercial) || 0) : (parseFloat(medidaDirectaComercial) || 0);
+    else cargoFijo = parseFloat(medidaDirectaHogar) || 0;
+    
+    return acc + (tarifaEB * consumo * (1 + taxRate)) + cargoFijo;
+  }, 0);
+    return totalOR > 0 ? (((totalOR - totalEB) / totalOR) * 100).toFixed(1) : "0";
+  }
 
   // Función para guardar Parámetros de Operador
   const handleSaveParametros = () => {
@@ -900,12 +1000,12 @@ function App() {
                 </button>
                 {consumo > 0 && dashData.length > 0 && (
                   <button 
-                    onClick={exportSimulationPNG}
+                    onClick={createComercialPitch}
                     className="btn btn-primary"
                     style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', padding: '0.5rem 1rem', background: '#3b82f6' }}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    Exportar PNG
+                    Crear Propuesta Comercial
                   </button>
                 )}
                 {invoiceError && <span style={{ fontSize: '0.8rem', color: '#dc2626' }}>Error: {invoiceError}</span>}
@@ -1128,74 +1228,10 @@ function App() {
                    <div>
                       <h4 style={{color: '#166534', margin: 0, fontSize: '1.1rem', fontWeight: '800'}}>Propuesta de Valor enerBit</h4>
                       <p style={{color: '#15803d', margin: '0.3rem 0 0 0', fontSize: '1rem', lineHeight: '1.4'}}>
-                        Basado en el análisis de los meses con datos, el cliente ahorraría un promedio mensual de <strong style={{fontSize: '1.2rem'}}>{currency(dashData.filter(m => {
-                           const d = m.niveles?.[simNivel] || {};
-                           const isIndustrial = simMercado === "Comercial";
-                           const tarifaEB = isIndustrial ? (d.pro_comercio || 0) : (d.pro_hogar || 0);
-                           return tarifaEB > 0;
-                        }).reduce((acc, m) => {
-                           const d = m.niveles?.[simNivel] || {};
-                           const isIndustrial = simMercado === "Comercial";
-                           const isZC = !isIndustrial && simEsZC === "Sí";
-                           const paysContribution = isIndustrial || (!isZC && parseInt(simEstrato) >= 5);
-                           const taxRate = paysContribution ? 0.20 : 0.0;
-                           
-                           const tarifaOR = d.cot_or || 0;
-                           const tarifaEB = isIndustrial ? (d.pro_comercio || 0) : (d.pro_hogar || 0);
-                           
-                           const subtotalOR = (tarifaOR * consumo) * (1 + taxRate);
-                           
-                           let cargoFijo = 0;
-                           const factorNum = parseFloat(simFactor) || 0;
-                           const isIndirect = factorNum >= 80;
-
-                           if (isZC) cargoFijo = isIndirect ? (parseFloat(medidaSemiIndirectaZc) || 0) : (parseFloat(medidaDirectaZc) || 0);
-                           else if (isIndustrial) cargoFijo = isIndirect ? (parseFloat(medidaSemiIndirectaComercial) || 0) : (parseFloat(medidaDirectaComercial) || 0);
-                           else cargoFijo = parseFloat(medidaDirectaHogar) || 0;
-
-                           const subtotalEB = (tarifaEB * consumo * (1 + taxRate)) + cargoFijo;
-                           return acc + (subtotalOR - subtotalEB);
-                        }, 0) / (dashData.filter(m => {
-                           const d = m.niveles?.[simNivel] || {};
-                           const isIndustrial = simMercado === "Comercial";
-                           const tarifaEB = isIndustrial ? (d.pro_comercio || 0) : (d.pro_hogar || 0);
-                           return tarifaEB > 0;
-                        }).length || 1))}</strong>.
+                        Basado en el análisis de los meses con datos, el cliente ahorraría un promedio mensual de <strong style={{fontSize: '1.2rem'}}>{buildValuePitch(consumo, currency)}</strong>.
                       </p>
                       <div style={{marginTop: '0.6rem', display: 'inline-block', background: '#22c55e', color: 'white', padding: '0.4rem 1rem', borderRadius: '20px', fontWeight: '700', fontSize: '0.95rem'}}>
-                         ⚡️ Ahorro estimado del {(() => {
-                           const totalOR = dashData.reduce((acc, m) => {
-                              const d = m.niveles?.[simNivel] || {};
-                              const isIndustrial = simMercado === "Comercial";
-                              const isZC = !isIndustrial && simEsZC === "Sí";
-                              const tarifaEB = isIndustrial ? (d.pro_comercio || 0) : (d.pro_hogar || 0);
-                              if (tarifaEB <= 0) return acc;
-                              const paysContribution = isIndustrial || (!isZC && parseInt(simEstrato) >= 5);
-                              const taxRate = paysContribution ? 0.20 : 0.0;
-                              return acc + ((d.cot_or || 0) * consumo * (1 + taxRate));
-                           }, 0);
-                           const totalEB = dashData.reduce((acc, m) => {
-                              const d = m.niveles?.[simNivel] || {};
-                              const isIndustrial = simMercado === "Comercial";
-                              const isZC = !isIndustrial && simEsZC === "Sí";
-                              const tarifaEB = isIndustrial ? (d.pro_comercio || 0) : (d.pro_hogar || 0);
-                              if (tarifaEB <= 0) return acc;
-                              
-                              const paysContribution = isIndustrial || (!isZC && parseInt(simEstrato) >= 5);
-                              const taxRate = paysContribution ? 0.20 : 0.0;
-                              
-                              let cargoFijo = 0;
-                              const factorNum = parseFloat(simFactor) || 0;
-                              const isIndirect = factorNum >= 80;
-
-                              if (isZC) cargoFijo = isIndirect ? (parseFloat(medidaSemiIndirectaZc) || 0) : (parseFloat(medidaDirectaZc) || 0);
-                              else if (isIndustrial) cargoFijo = isIndirect ? (parseFloat(medidaSemiIndirectaComercial) || 0) : (parseFloat(medidaDirectaComercial) || 0);
-                              else cargoFijo = parseFloat(medidaDirectaHogar) || 0;
-                              
-                              return acc + (tarifaEB * consumo * (1 + taxRate)) + cargoFijo;
-                           }, 0);
-                           return totalOR > 0 ? (((totalOR - totalEB) / totalOR) * 100).toFixed(1) : "0";
-                        })()}% sobre facturación actual
+                         ⚡️ Ahorro estimado del {buildPercentageSave(consumo)}% sobre facturación actual
                       </div>
                    </div>
                 </div>

@@ -7,6 +7,7 @@ const TENSION_LEVELS = {
   "CLIENTE": "CU1 Prop, Cliente",
   "N2": "CU2",
   "N3": "CU3",
+  "PROPIEDAD EMPRESA": "CU1 Prop, OR",
 }
 
 function App() {
@@ -112,6 +113,7 @@ function App() {
       });
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const json = await res.json();
+      console.log(json)
       setInvoiceResult(json);
       setSimConsumo(json.consumo_mes_anterior_kwh || "");
       setSimNivel(TENSION_LEVELS[json.propiedad_activo?.toUpperCase()] || "")
@@ -1010,6 +1012,11 @@ function App() {
                             const hasDataEB = tarifaEB > 0;
                             
                             const subtotalOR = tarifaOR * consumo;
+                            console.log({
+                              tarifaOR,
+                              tarifaEB,
+                              consumo,
+                            })
                             const subtotalEB = hasDataEB ? tarifaEB * consumo : 0;
                             
                             const totalOR = subtotalOR * (1 + taxRate);

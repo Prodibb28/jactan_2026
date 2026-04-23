@@ -92,7 +92,8 @@ async def invoice_extractor(file: UploadFile = File(...)):
                             2. "consumo_mes_anterior_kwh": In the "Consumo de los últimos 6 meses" bar chart,
                             there are 7 bars shown (6 previous months + current month).
                             Extract ONLY the second-to-last bar value (the month immediately before the current billing period).
-                            Do NOT return the current month's consumption.
+                            Do NOT return the current month's consumption OR if it not possible to read those values
+                            extract it from "Consumo KWh" which is located on the "Datos de Lectura" section.
 
                             3. "dias_facturados": Extract the number next to "Días Facturados" in the meter reading section.
 

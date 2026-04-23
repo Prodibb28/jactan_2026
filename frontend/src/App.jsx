@@ -70,6 +70,12 @@ function App() {
   const [dashFijabit, setDashFijabit] = useState(null);
   const [dashFijabitCom, setDashFijabitCom] = useState(null);
 
+  // Estados para Simulación de Ahorro
+  const [simConsumo, setSimConsumo] = useState("");
+  const [simNivel, setSimNivel] = useState("CU1 Prop, OR");
+  const [simEstrato, setSimEstrato] = useState("4");
+  const [simMercado, setSimMercado] = useState("Hogar");
+
   const fetchRegistros = () => {
     fetch('http://localhost:8000/registros/')
       .then(res => res.json())
@@ -773,11 +779,214 @@ function App() {
         </div>
       );
     } else if (activeTab === 'config') {
+      const niveles = ["CU1 Prop, OR", "CU12 Prop, Mixta", "CU1 Prop, Cliente", "CU2", "CU3"];
+      const fmt = (v) => v !== null && v !== undefined ? v.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+      const currency = (v) => v !== null && v !== undefined ? v.toLocaleString('es-CO', { style: 'currency', currency: 'COP' }) : '—';
+      
+      const consumo = parseFloat(simConsumo) || 0;
+      
       return (
-        <div className="tab-content fade-in construction-view">
-          <svg className="cog-icon" xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"></polygon><line x1="12" y1="22" x2="12" y2="15.5"></line><polyline points="22 8.5 12 15.5 2 8.5"></polyline><polyline points="2 15.5 12 8.5 22 15.5"></polyline><line x1="12" y1="2" x2="12" y2="8.5"></line></svg>
-          <h2>Configuraciones</h2>
-          <p>Módulo de gestión de usuarios y parámetros en construcción...</p>
+        <div className="tab-content fade-in">
+          <div className="module-title">
+            <h2>Simulación de Propuesta Comercial</h2>
+            <p className="text-subtitle">Proyecta el ahorro potencial del cliente basado en su consumo real y las tarifas vigentes.</p>
+          </div>
+
+          <section className="upload-section fade-in">
+            <div className="metadata-container">
+              <div className="input-group">
+                <label>Consumo Promedio Mensual (kWh)</label>
+                <div className="input-prefix">
+                  <input 
+                    type="number" 
+                    placeholder="Ej: 350" 
+                    value={simConsumo} 
+                    onChange={(e) => setSimConsumo(e.target.value)} 
+                    style={{paddingLeft: '1rem'}}
+                  />
+                </div>
+              </div>
+
+              <div className="input-group">
+                <label>Nivel de Tensión / Propiedad</label>
+                <select value={simNivel} onChange={(e) => setSimNivel(e.target.value)}>
+                  {niveles.map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+
+              <div className="input-group">
+                <label>Vigencia (Año)</label>
+                <select value={dashAnio} onChange={(e) => setDashAnio(e.target.value)}>
+                  {Array.from({ length: 31 }, (_, i) => 2015 + i).map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="input-group">
+                <label>Mercado</label>
+                <select value={simMercado} onChange={(e) => setSimMercado(e.target.value)}>
+                  <option value="Hogar">🏠 Residencial (Hogar)</option>
+                  <option value="Comercial">🏢 Comercial / Industrial</option>
+                </select>
+              </div>
+
+              <div className="input-group">
+                <label>Estrato</label>
+                <select value={simEstrato} onChange={(e) => setSimEstrato(e.target.value)} disabled={simMercado === 'Comercial'}>
+                  {[1, 2, 3, 4, 5, 6].map(s => <option key={s} value={s}>Estrato {s}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {consumo > 0 ? (
+              <div className="grouped-documents-list" style={{marginTop: '2rem'}}>
+                <article className="document-card fade-in">
+                  <div className="document-card-header">
+                    <div className="doc-meta">
+                      <span className="doc-operator">📈 Proyección de Costos: {simNivel}</span>
+                      <span className="doc-period">Basado en {consumo} kWh/mes</span>
+                    </div>
+                    <span className="doc-badge" style={{background: '#dcfce7', color: '#166534'}}>Simulación Activa</span>
+                  </div>
+                  
+                  <div className="document-card-body">
+                    <div className="table-wrapper local-table-wrapper">
+                      <table className="flat-table compact-table">
+                        <thead>
+                          <tr>
+                            <th style={{textAlign: 'left'}}>Mes</th>
+                            <th>Tarifa {dashOR}</th>
+                            <th>Contrib. {dashOR}</th>
+                            <th>Total {dashOR}</th>
+                            <th>Tarifa enerBit</th>
+                            <th>Contrib. enerBit</th>
+                            <th>Total enerBit</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {dashData.sort((a, b) => a.mes - b.mes).map((m, idx) => {
+                            const d = m.niveles?.[simNivel] || {};
+                            const paysContribution = simMercado === "Comercial" || parseInt(simEstrato) >= 5;
+                            const taxRate = paysContribution ? 0.20 : 0.0;
+                            
+                            const tarifaOR = d.cot_or || 0;
+                            const tarifaEB = simMercado === "Hogar" ? (d.pro_hogar || 0) : (d.pro_comercio || 0);
+                            
+                            const hasDataEB = tarifaEB > 0;
+                            
+                            const subtotalOR = tarifaOR * consumo;
+                            const subtotalEB = hasDataEB ? tarifaEB * consumo : 0;
+                            
+                            const taxOR = subtotalOR * taxRate;
+                            const taxEB = hasDataEB ? subtotalEB * taxRate : 0;
+                            
+                            const totalOR = subtotalOR + taxOR;
+                            const totalEB = hasDataEB ? subtotalEB + taxEB : 0;
+                            const ahorro = hasDataEB ? totalOR - totalEB : null;
+                            const pctAhorro = (hasDataEB && totalOR > 0) ? (ahorro / totalOR) * 100 : null;
+                            
+                            return (
+                              <tr key={idx}>
+                                <td className="font-medium text-dark" style={{textAlign: 'left'}}>
+                                  {meses.find(mes => mes.num === m.mes)?.name}
+                                </td>
+                                <td>{fmt(tarifaOR)}</td>
+                                <td className="text-muted">{currency(taxOR)}</td>
+                                <td className="text-muted">{currency(totalOR)}</td>
+                                
+                                <td className={`text-enerbit font-bold ${!hasDataEB ? 'text-muted' : ''}`}>{hasDataEB ? fmt(tarifaEB) : "Sin datos"}</td>
+                                <td className="text-enerbit">{hasDataEB ? currency(taxEB) : "—"}</td>
+                                <td className="font-bold text-dark">{hasDataEB ? currency(totalEB) : "—"}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                        {dashData.filter(m => {
+                           const d = m.niveles?.[simNivel] || {};
+                           const tarifaEB = simMercado === "Hogar" ? (d.pro_hogar || 0) : (d.pro_comercio || 0);
+                           return tarifaEB > 0;
+                        }).length > 0 && (
+                           <tfoot>
+                              <tr style={{background: '#f8fafc', fontWeight: '900', borderTop: '2px solid var(--primary)'}}>
+                                 <td colSpan="3" style={{textAlign: 'right', padding: '1.2rem', color: 'var(--primary)'}}>TOTAL ACUMULADO</td>
+                                 <td className="text-muted">
+                                    {currency(dashData.reduce((acc, m) => {
+                                       const d = m.niveles?.[simNivel] || {};
+                                       const tarifaEB = simMercado === "Hogar" ? (d.pro_hogar || 0) : (d.pro_comercio || 0);
+                                       if (tarifaEB <= 0) return acc;
+                                       const taxRate = (simMercado === "Comercial" || parseInt(simEstrato) >= 5) ? 0.20 : 0.0;
+                                       return acc + ((d.cot_or || 0) * consumo * (1 + taxRate));
+                                    }, 0))}
+                                 </td>
+                                 <td colSpan="2" style={{textAlign: 'right'}}></td>
+                                 <td className="text-dark">
+                                    {currency(dashData.reduce((acc, m) => {
+                                       const d = m.niveles?.[simNivel] || {};
+                                       const tarifaEB = simMercado === "Hogar" ? (d.pro_hogar || 0) : (d.pro_comercio || 0);
+                                       if (tarifaEB <= 0) return acc;
+                                       const taxRate = (simMercado === "Comercial" || parseInt(simEstrato) >= 5) ? 0.20 : 0.0;
+                                       return acc + (tarifaEB * consumo * (1 + taxRate));
+                                    }, 0))}
+                                 </td>
+                              </tr>
+                           </tfoot>
+                        )}
+                      </table>
+                    </div>
+                  </div>
+                </article>
+                
+                <div style={{marginTop: '1.5rem', padding: '1.5rem', background: '#f0fdf4', borderRadius: '12px', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', gap: '1.5rem'}}>
+                   <div style={{background: '#22c55e', color: 'white', width: '56px', height: '56px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.8rem', boxShadow: '0 4px 6px rgba(34, 197, 94, 0.2)'}}>💰</div>
+                   <div>
+                      <h4 style={{color: '#166534', margin: 0, fontSize: '1.1rem'}}>Propuesta de Valor enerBit</h4>
+                      <p style={{color: '#15803d', margin: '0.3rem 0 0 0', fontSize: '1rem', lineHeight: '1.4'}}>
+                        Basado en el análisis de los meses con datos, el cliente ahorraría un promedio mensual de <strong style={{fontSize: '1.2rem'}}>{currency(dashData.filter(m => {
+                           const d = m.niveles?.[simNivel] || {};
+                           const tarifaEB = simMercado === "Hogar" ? (d.pro_hogar || 0) : (d.pro_comercio || 0);
+                           return tarifaEB > 0;
+                        }).reduce((acc, m) => {
+                           const d = m.niveles?.[simNivel] || {};
+                           const taxRate = (simMercado === "Comercial" || parseInt(simEstrato) >= 5) ? 0.20 : 0.0;
+                           const tarifaOR = d.cot_or || 0;
+                           const tarifaEB = simMercado === "Hogar" ? (d.pro_hogar || 0) : (d.pro_comercio || 0);
+                           return acc + ((tarifaOR - tarifaEB) * consumo * (1 + taxRate));
+                        }, 0) / (dashData.filter(m => {
+                           const d = m.niveles?.[simNivel] || {};
+                           const tarifaEB = simMercado === "Hogar" ? (d.pro_hogar || 0) : (d.pro_comercio || 0);
+                           return tarifaEB > 0;
+                        }).length || 1))}</strong>.
+                      </p>
+                      <div style={{marginTop: '0.6rem', display: 'inline-block', background: '#22c55e', color: 'white', padding: '0.4rem 1rem', borderRadius: '20px', fontWeight: '700', fontSize: '0.95rem'}}>
+                         ⚡️ Ahorro estimado del {(() => {
+                           const totalOR = dashData.reduce((acc, m) => {
+                              const d = m.niveles?.[simNivel] || {};
+                              const tarifaEB = simMercado === "Hogar" ? (d.pro_hogar || 0) : (d.pro_comercio || 0);
+                              if (tarifaEB <= 0) return acc;
+                              const taxRate = (simMercado === "Comercial" || parseInt(simEstrato) >= 5) ? 0.20 : 0.0;
+                              return acc + ((d.cot_or || 0) * consumo * (1 + taxRate));
+                           }, 0);
+                           const totalEB = dashData.reduce((acc, m) => {
+                              const d = m.niveles?.[simNivel] || {};
+                              const tarifaEB = simMercado === "Hogar" ? (d.pro_hogar || 0) : (d.pro_comercio || 0);
+                              if (tarifaEB <= 0) return acc;
+                              const taxRate = (simMercado === "Comercial" || parseInt(simEstrato) >= 5) ? 0.20 : 0.0;
+                              return acc + (tarifaEB * consumo * (1 + taxRate));
+                           }, 0);
+                           return totalOR > 0 ? (((totalOR - totalEB) / totalOR) * 100).toFixed(1) : "0";
+                        })()}% sobre facturación actual
+                      </div>
+                   </div>
+                </div>
+              </div>
+            ) : (
+              <div className="construction-view" style={{height: '300px'}}>
+                <svg className="cog-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                <p>Ingresa el consumo mensual para generar la simulación.</p>
+              </div>
+            )}
+          </section>
         </div>
       );
     }
@@ -816,8 +1025,8 @@ function App() {
                 className={`nav-btn ${activeTab === 'config' ? 'active' : ''}`}
                 onClick={() => setActiveTab('config')}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
-                <span className="nav-text">Configuración</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                <span className="nav-text">Simulación</span>
               </button>
             </li>
           </ul>
@@ -831,7 +1040,7 @@ function App() {
              <h1 className="header-title">
                {activeTab === 'upload' && "Administración Central"}
                {activeTab === 'resumen' && "Visualizador Global"}
-               {activeTab === 'config' && "Ajustes de Sistema"}
+               {activeTab === 'config' && "Simulador de Propuestas"}
              </h1>
              <div className="header-user">Gestor Tarifario</div>
            </div>

@@ -12,6 +12,14 @@ function App() {
   const [error, setError] = useState(null);
   const [dragActive, setDragActive] = useState(false);
 
+  // Estados del escáner CSV
+  const [csvFile, setCsvFile] = useState(null);
+  const [csvLoading, setCsvLoading] = useState(false);
+  const [csvError, setCsvError] = useState(null);
+  const [csvSuccess, setCsvSuccess] = useState(null);
+  const [csvDragActive, setCsvDragActive] = useState(false);
+  const [csvWarning, setCsvWarning] = useState(false);
+
   const [operador, setOperador] = useState("Afinia");
   const [mes, setMes] = useState(new Date().getMonth() + 1);
   const [anio, setAnio] = useState(new Date().getFullYear());
@@ -34,7 +42,7 @@ function App() {
   const [saveSuccessOp, setSaveSuccessOp] = useState(null);
   const [saveSuccessGlobal, setSaveSuccessGlobal] = useState(null);
 
-  const operadoresSoportados = ["Afinia", "Enel"];
+  const operadoresSoportados = ["Afinia", "enerBit"];
   const meses = [
     { num: 1, name: "Enero" }, { num: 2, name: "Febrero" }, { num: 3, name: "Marzo" },
     { num: 4, name: "Abril" }, { num: 5, name: "Mayo" }, { num: 6, name: "Junio" },
@@ -49,6 +57,18 @@ function App() {
   // Estados para filtros en la tabla
   const [filterMes, setFilterMes] = useState("");
   const [filterAnio, setFilterAnio] = useState(new Date().getFullYear().toString());
+  const [filterFuente, setFilterFuente] = useState("todas"); // 'todas', 'afinia', 'enerbit'
+
+  // Datos enerBit
+  const [dataEnerbit, setDataEnerbit] = useState([]);
+
+  // Estados del Dashboard Resumen
+  const [dashOR, setDashOR] = useState("Afinia");
+  const [dashAnio, setDashAnio] = useState(new Date().getFullYear());
+  const [dashMes, setDashMes] = useState(new Date().getMonth() + 1);
+  const [dashData, setDashData] = useState([]);
+  const [dashFijabit, setDashFijabit] = useState(null);
+  const [dashFijabitCom, setDashFijabitCom] = useState(null);
 
   const fetchRegistros = () => {
     fetch('http://localhost:8000/registros/')
@@ -59,9 +79,33 @@ function App() {
       .catch(err => console.error("Error al cargar historial:", err));
   };
 
+  const fetchRegistrosEnerbit = () => {
+    fetch('http://localhost:8000/registros-enerbit/')
+      .then(res => res.json())
+      .then(json => {
+        if(Array.isArray(json)) setDataEnerbit(json);
+      })
+      .catch(err => console.error("Error al cargar enerBit:", err));
+  };
+
   useEffect(() => {
     fetchRegistros();
+    fetchRegistrosEnerbit();
   }, []);
+
+  // Auto-fetch del Dashboard Resumen cuando cambia OR o año
+  useEffect(() => {
+    if (dashAnio && dashOR) {
+      fetch(`http://localhost:8000/dashboard/resumen?anio=${dashAnio}&operador_red=${dashOR}`)
+        .then(res => res.json())
+        .then(json => {
+          setDashData(json.data || []);
+          setDashFijabit(json.fijabit_hogar);
+          setDashFijabitCom(json.fijabit_comercial);
+        })
+        .catch(err => console.error("Error al cargar resumen:", err));
+    }
+  }, [dashAnio, dashOR]);
 
   // Auto-fetch de Parámetros de Operador cuando cambie el año o el operador
   useEffect(() => {
@@ -137,29 +181,49 @@ function App() {
     .catch(() => { setSaveSuccessGlobal("✗ Error al guardar"); setTimeout(() => setSaveSuccessGlobal(null), 3000); });
   };
 
-  // LÓGICA DE AGRUPACIÓN (UX Mejora: Agrupar por documento)
+  // LÓGICA DE AGRUPACIÓN (combina Afinia PDF + enerBit CSV)
   const groupedData = useMemo(() => {
     const groups = {};
-    data.forEach(row => {
-      // Creamos un identificador único para el documento Padre (ej: "Afinia-4-2026")
-      const groupKey = `${row.operador_red}-${row.anio}-${row.mes}`;
-      if (!groups[groupKey]) {
-        groups[groupKey] = {
-          operador_red: row.operador_red,
-          mes: row.mes,
-          anio: row.anio,
-          registros: []
-        };
-      }
-      groups[groupKey].registros.push(row);
-    });
+
+    // Incluir datos Afinia (PDF) si el filtro lo permite
+    if (filterFuente === 'todas' || filterFuente === 'afinia') {
+      data.forEach(row => {
+        const groupKey = `afinia-${row.operador_red}-${row.anio}-${row.mes}`;
+        if (!groups[groupKey]) {
+          groups[groupKey] = {
+            operador_red: row.operador_red,
+            fuente: 'Afinia (OR)',
+            mes: row.mes,
+            anio: row.anio,
+            registros: []
+          };
+        }
+        groups[groupKey].registros.push(row);
+      });
+    }
+
+    // Incluir datos enerBit (CSV)
+    if (filterFuente === 'todas' || filterFuente === 'enerbit') {
+      dataEnerbit.forEach(row => {
+        const groupKey = `enerbit-${row.or_asociado}-${row.anio}-${row.mes}`;
+        if (!groups[groupKey]) {
+          groups[groupKey] = {
+            operador_red: 'enerBit',
+            fuente: `enerBit → ${row.or_asociado}`,
+            mes: row.mes,
+            anio: row.anio,
+            registros: []
+          };
+        }
+        groups[groupKey].registros.push(row);
+      });
+    }
     
-    // Convertir el diccionario a un array y ordenar por fecha reciente (asumiendo que anio/mes determina el orden)
     return Object.values(groups).sort((a, b) => {
       if (b.anio !== a.anio) return b.anio - a.anio;
       return b.mes - a.mes;
     });
-  }, [data]);
+  }, [data, dataEnerbit, filterFuente]);
 
   const handleDrag = function(e) {
     e.preventDefault();
@@ -238,6 +302,50 @@ function App() {
     }
   };
 
+  // --- HANDLER CSV (enerBit → guarda en tablas DocumentoEnerbit) ---
+  const handleCsvUpload = async (forceOverwrite = false) => {
+    if (!csvFile || !operador || !mes || !anio) return;
+    setCsvLoading(true);
+    setCsvError(null);
+
+    const formData = new FormData();
+    formData.append('file', csvFile);
+    formData.append('operador_red', operador);
+    formData.append('mes', mes);
+    formData.append('anio', anio);
+    formData.append('overwrite', forceOverwrite ? 'true' : 'false');
+
+    try {
+      const response = await fetch('http://localhost:8000/upload-csv/', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.status === 409) {
+        setCsvWarning(true);
+        setCsvLoading(false);
+        return;
+      }
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail || `HTTP error ${response.status}`);
+      }
+
+      const result = await response.json();
+      setCsvSuccess(result.sobreescrito
+        ? `✓ Datos enerBit sobrescritos: ${result.data.length} registros.`
+        : `✓ CSV enerBit guardado: ${result.data.length} registros insertados.`);
+      setTimeout(() => setCsvSuccess(null), 5000);
+      setCsvWarning(false);
+      fetchRegistrosEnerbit();
+      setCsvFile(null);
+    } catch (err) {
+      setCsvError(err.message);
+    } finally {
+      setCsvLoading(false);
+    }
+  };
+
   const renderContent = () => {
     if (activeTab === 'upload') {
       return (
@@ -291,55 +399,83 @@ function App() {
               </div>
             </div>
 
-            <form 
-              className={`drag-file-element ${dragActive ? "drag-active" : ""}`}
-              onDragEnter={handleDrag} 
-              onDragLeave={handleDrag} 
-              onDragOver={handleDrag} 
-              onDrop={handleDrop}
-              onSubmit={(e) => e.preventDefault()}
-            >
-              <div className="upload-content">
-                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="upload-icon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                {file ? (
-                  <p className="file-name">✅ Archivo adjunto: <b>{file.name}</b></p>
+            {/* ZONA DINÁMICA: PDF para Afinia, CSV para enerBit */}
+            {operador === 'Afinia' ? (
+              <>
+                <form 
+                  className={`drag-file-element ${dragActive ? "drag-active" : ""}`}
+                  onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
+                  onSubmit={(e) => e.preventDefault()}
+                >
+                  <div className="upload-content">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="upload-icon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                    {file ? (
+                      <p className="file-name">✅ Archivo adjunto: <b>{file.name}</b></p>
+                    ) : (
+                      <p>Arrastra y suelta tu archivo <b>PDF</b> de Afinia aquí o <span className="ul-link">haz click para seleccionarlo</span></p>
+                    )}
+                    <input type="file" id="input-file-upload" multiple={false} accept=".pdf" onChange={handleChange} />
+                  </div>
+                </form>
+
+                {error && <div className="error-card">⚠️ Error: {error}</div>}
+                {successMessage && <div className="success-card">{successMessage}</div>}
+
+                {awaitingConfirmation ? (
+                  <div className="confirmation-card">
+                    <p className="confirmation-text">Ya existe un directorio tarifario para <strong>{operador}</strong> en este período. ¿Sobrescribir?</p>
+                    <div className="confirmation-actions">
+                      <button className="btn btn-outline" onClick={() => { setAwaitingConfirmation(false); setLoading(false); }}>Cancelar</button>
+                      <button className="btn btn-danger" onClick={handleUpload}>Confirmar Sobrescritura</button>
+                    </div>
+                  </div>
                 ) : (
-                  <p>Arrastra y suelta tu archivo PDF aquí o <span className="ul-link">haz click para seleccionarlo</span></p>
+                  <button className="btn btn-primary btn-block" onClick={handleUpload} disabled={!file || loading}>
+                    {loading ? <span className="loader"></span> : "Procesar PDF y Guardar Registro"}
+                  </button>
                 )}
-                <input 
-                  type="file" 
-                  id="input-file-upload" 
-                  multiple={false} 
-                  accept=".pdf"
-                  onChange={handleChange} 
-                />
-              </div>
-            </form>
-
-            {error && <div className="error-card">⚠️ Error: {error}</div>}
-            {successMessage && <div className="success-card">{successMessage}</div>}
-
-            {awaitingConfirmation ? (
-              <div className="confirmation-card">
-                <p className="confirmation-text">
-                  Ya existe un directorio tarifario para <strong>{operador}</strong> en este período. 
-                  ¿Estás seguro de que deseas sobrescribir los datos actuales?
-                </p>
-                <div className="confirmation-actions">
-                  <button className="btn btn-outline" onClick={() => { setAwaitingConfirmation(false); setLoading(false); }}>Cancelar</button>
-                  <button className="btn btn-danger" onClick={handleUpload}>Confirmar Sobrescritura</button>
-                </div>
-              </div>
+              </>
             ) : (
-              <button 
-                className="btn btn-primary btn-block" 
-                onClick={handleUpload} 
-                disabled={!file || loading}
-              >
-                {loading ? <span className="loader"></span> : "Procesar y Guardar Registro"}
-              </button>
+              <>
+                <form 
+                  className={`drag-file-element ${csvDragActive ? "drag-active" : ""}`}
+                  onDragEnter={(e) => { e.preventDefault(); setCsvDragActive(true); }}
+                  onDragLeave={(e) => { e.preventDefault(); setCsvDragActive(false); }}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => { e.preventDefault(); setCsvDragActive(false); if (e.dataTransfer.files[0]) setCsvFile(e.dataTransfer.files[0]); }}
+                  onSubmit={(e) => e.preventDefault()}
+                >
+                  <div className="upload-content">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="upload-icon"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                    {csvFile ? (
+                      <p className="file-name">✅ Archivo adjunto: <b>{csvFile.name}</b></p>
+                    ) : (
+                      <p>Arrastra y suelta tu archivo <b>CSV</b> de enerBit aquí o <span className="ul-link">haz click para seleccionarlo</span></p>
+                    )}
+                    <input type="file" id="input-csv-upload" multiple={false} accept=".csv" onChange={(e) => { if (e.target.files[0]) setCsvFile(e.target.files[0]); }} />
+                  </div>
+                </form>
+
+                {csvError && <div className="error-card">⚠️ Error: {csvError}</div>}
+                {csvSuccess && <div className="success-card">{csvSuccess}</div>}
+
+                {csvWarning ? (
+                  <div className="confirmation-card">
+                    <p className="confirmation-text">Ya existe un registro enerBit para <strong>Afinia</strong> en este período. ¿Sobrescribir?</p>
+                    <div className="confirmation-actions">
+                      <button className="btn btn-outline" onClick={() => { setCsvWarning(false); setCsvLoading(false); }}>Cancelar</button>
+                      <button className="btn btn-danger" onClick={() => handleCsvUpload(true)}>Confirmar Sobrescritura</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button className="btn btn-primary btn-block" onClick={() => handleCsvUpload(false)} disabled={!csvFile || csvLoading}>
+                    {csvLoading ? <span className="loader"></span> : "Procesar CSV y Guardar Registro"}
+                  </button>
+                )}
+              </>
             )}
           </section>
+
 
           {groupedData.length > 0 && (
             <section className="data-section fade-in">
@@ -363,6 +499,11 @@ function App() {
                       <option key={y} value={y}>{y}</option>
                     ))}
                   </select>
+                  <select className="filter-select" value={filterFuente} onChange={(e) => setFilterFuente(e.target.value)}>
+                    <option value="todas">Todas las fuentes</option>
+                    <option value="afinia">Afinia (OR directo)</option>
+                    <option value="enerbit">enerBit → Afinia</option>
+                  </select>
                 </div>
               </div>
               
@@ -377,7 +518,7 @@ function App() {
                     <article key={index} className="document-card fade-in" style={{ animationDelay: `${index * 0.1}s` }}>
                       <div className="document-card-header">
                         <div className="doc-meta">
-                          <span className="doc-operator">⚡️ {docGroup.operador_red}</span>
+                          <span className="doc-operator">⚡️ {docGroup.fuente || docGroup.operador_red}</span>
                           <span className="doc-period">{mesName} {docGroup.anio}</span>
                         </div>
                         <span className="doc-badge">{docGroup.registros.length} niveles extraídos</span>
@@ -460,12 +601,12 @@ function App() {
                       </div>
 
                       <div className="input-group">
-                        <label>FijaBit Hogar</label>
+                        <label>FijaBit Hogar (2026)</label>
                         <div className="input-prefix"><span className="prefix">$</span><input type="number" placeholder="0.00" className="pl-prefix" value={fijabitHogar} onChange={(e) => setFijabitHogar(e.target.value)} /></div>
                       </div>
 
                       <div className="input-group">
-                        <label>FijaBit Comercial</label>
+                        <label>FijaBit Comercial (2026)</label>
                         <div className="input-prefix"><span className="prefix">$</span><input type="number" placeholder="0.00" className="pl-prefix" value={fijabitComercial} onChange={(e) => setFijabitComercial(e.target.value)} /></div>
                       </div>
                     </div>
@@ -532,11 +673,103 @@ function App() {
         </div>
       );
     } else if (activeTab === 'resumen') {
+      const niveles = ["CU1 Prop, OR", "CU12 Prop, Mixta", "CU1 Prop, Cliente", "CU2", "CU3"];
+      const mesData = dashData.find(d => d.mes === Number(dashMes));
+      const fmt = (v) => v !== null && v !== undefined ? v.toFixed(2) : '—';
+      const cls = (v) => v > 0 ? 'diff-positive' : v < 0 ? 'diff-negative' : '';
       return (
-        <div className="tab-content fade-in construction-view">
-          <svg className="cog-icon" xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"></path><path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"></path><path d="M12 2v2"></path><path d="M12 22v-2"></path><path d="m17 20.66-1-1.73"></path><path d="M11 10.27 7.53 4.27"></path><path d="m7 20.66 1-1.73"></path><path d="M16.47 4.27 13 10.27"></path><path d="M22 12h-2"></path><path d="M4 12H2"></path><path d="m17 3.34-1 1.73"></path><path d="M11 13.73 7.53 19.73"></path><path d="m7 3.34 1 1.73"></path><path d="M16.47 19.73 13 13.73"></path></svg>
-          <h2>Resumen y Dashboard</h2>
-          <p>Módulo de visualización geográfica y calculadoras en construcción...</p>
+        <div className="tab-content fade-in">
+          <div className="module-title">
+            <h2>Dashboard Comparativo</h2>
+            <p className="text-subtitle">Análisis tarifario enerBit vs {dashOR} (OR)</p>
+          </div>
+
+          <section className="upload-section fade-in">
+            <div className="metadata-container">
+              <div className="input-group">
+                <label>Operador de Red</label>
+                <select value={dashOR} onChange={(e) => setDashOR(e.target.value)}>
+                  <option value="Afinia">Afinia</option>
+                </select>
+              </div>
+              <div className="input-group">
+                <label>Mes</label>
+                <select value={dashMes} onChange={(e) => setDashMes(e.target.value)}>
+                  {meses.map(m => <option key={m.num} value={m.num}>{m.name}</option>)}
+                </select>
+              </div>
+              <div className="input-group">
+                <label>Año</label>
+                <select value={dashAnio} onChange={(e) => setDashAnio(e.target.value)}>
+                  {Array.from({ length: 31 }, (_, i) => 2015 + i).map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {(dashFijabit !== null || dashFijabitCom !== null) && (
+              <div style={{display:'flex', alignItems: 'center', gap:'1.5rem', marginTop: '0.8rem', background: 'rgba(249, 115, 22, 0.05)', padding: '0.8rem 1.2rem', borderRadius: '8px', border: '1px dashed rgba(249, 115, 22, 0.2)'}}>
+                <div className="doc-badge" style={{background: '#FFF7ED', color: '#C2410C', fontWeight: '700'}}>Año 2026</div>
+                {dashFijabit !== null && <p className="text-muted" style={{fontSize: '0.85rem', margin: 0}}>FijaBit Hogar: <strong className="text-dark">${dashFijabit?.toFixed(2)}</strong></p>}
+                {dashFijabitCom !== null && <p className="text-muted" style={{fontSize: '0.85rem', margin: 0}}>FijaBit Comercio: <strong className="text-dark">${dashFijabitCom?.toFixed(2)}</strong></p>}
+                <span className="text-muted" style={{fontSize: '0.75rem', fontStyle: 'italic', marginLeft: 'auto'}}>* Valores configurados para la vigencia actual.</span>
+              </div>
+            )}
+
+            {!mesData ? (
+              <div className="construction-view" style={{marginTop: '1.5rem', paddingBottom: '0.5rem'}}>
+                <p className="text-muted">No hay datos para {meses.find(m => m.num === Number(dashMes))?.name} {dashAnio}.</p>
+              </div>
+            ) : (
+              <div className="grouped-documents-list" style={{marginTop: '2rem'}}>
+                <article className="document-card fade-in">
+                  <div className="document-card-header">
+                    <div className="doc-meta">
+                      <span className="doc-operator">📊 Análisis Comparativo: {dashOR} vs enerBit</span>
+                      <span className="doc-period">{meses.find(m => m.num === Number(dashMes))?.name} {dashAnio}</span>
+                    </div>
+                    <span className="doc-badge">Resumen Detallado</span>
+                  </div>
+                  
+                  <div className="document-card-body">
+                    <div className="table-wrapper local-table-wrapper">
+                      <table className="flat-table compact-table">
+                        <thead>
+                          <tr>
+                            <th style={{textAlign: 'left'}}>Nivel</th>
+                            <th>COT {dashOR}</th>
+                            <th>COT enerBit</th>
+                      <th>Pro Hogar</th>
+                      <th>Pro Comercio</th>
+                            <th>Dif. Tarifaria</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {niveles.map((nivel, i) => {
+                            const d = mesData.niveles?.[nivel] || {};
+                            return (
+                              <tr key={i}>
+                                <td className="font-medium text-dark min-w-row" style={{textAlign: 'left'}}>
+                                  <strong>{nivel}</strong>
+                                </td>
+                                <td className="text-dark">{fmt(d.cot_or)}</td>
+                                <td className="font-bold text-enerbit">{fmt(d.cot_eb)}</td>
+                                <td>{fmt(d.pro_hogar)}</td>
+                                <td>{fmt(d.pro_comercio)}</td>
+                                <td className={`font-bold diff-cell ${cls(d.diferencia_tarifaria)}`}>
+                                  {fmt(d.diferencia_tarifaria)}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </article>
+              </div>
+            )}
+          </section>
         </div>
       );
     } else if (activeTab === 'config') {

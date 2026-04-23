@@ -738,3 +738,68 @@ select.form-select {
   width: 100%;
   box-sizing: border-box;
 }
+
+/* DASHBOARD COMPARATIVO */
+.table-responsive-wrapper {
+  overflow-x: auto;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.diff-cell {
+  text-align: center;
+  font-size: 0.9rem;
+  border-left: 2px solid var(--border);
+  border-right: 2px solid var(--border);
+}
+
+.diff-positive {
+  color: #16a34a;
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.diff-negative {
+  color: #dc2626;
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* DASHBOARD COMPARATIVO TABLE */
+.dash-table th,
+.dash-table td {
+  text-align: center;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  padding: 0.6rem 0.75rem;
+}
+
+.dash-table th {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+
+.dash-sticky-col {
+  position: sticky;
+  left: 0;
+  background: var(--surface);
+  z-index: 2;
+  text-align: left !important;
+  min-width: 140px;
+  border-right: 2px solid var(--border);
+}

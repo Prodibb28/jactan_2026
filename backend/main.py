@@ -2,11 +2,13 @@ from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, joinedload
 import pdfplumber
+import csv
 import re
 import os
+import io
 import aiofiles
 
-from database import SessionLocal, Documento, RegistroTarifario, ParametrosOperador, CargosGlobales
+from database import SessionLocal, Documento, RegistroTarifario, ParametrosOperador, CargosGlobales, DocumentoEnerbit, RegistroTarifarioEnerbit
 from pydantic import BaseModel
 from typing import Optional
 from routes.invoices import router as invoices_router
@@ -46,6 +48,8 @@ def get_db():
 
 def parse_decimal(text):
     if text is None: return None
+    text = text.strip()
+    if text.upper() == 'N/A': return 0.0
     try:
         return float(text.replace(',', '.').replace('$', '').strip())
     except (ValueError, TypeError, AttributeError):
@@ -58,6 +62,15 @@ filas_objetivo = [
     "Nivel 2",
     "Nivel 3"
 ]
+
+# Mapeo de nombres del PDF → estándar unificado (coincide con CSV)
+NIVEL_ESTANDAR = {
+    "Nivel 1 OR propietario activos": "CU1 Prop, OR",
+    "Nivel 1 propiedad activos compartida": "CU12 Prop, Mixta",
+    "Nivel 1 cliente propietario activos": "CU1 Prop, Cliente",
+    "Nivel 2": "CU2",
+    "Nivel 3": "CU3"
+}
 
 @app.post("/upload-pdf/")
 async def upload_pdf(
@@ -143,9 +156,9 @@ async def upload_pdf(
                     if i + 1 < len(lineas):
                         ops = re.findall(r'\b\d{1,3}(?:[.,]\d{2,3})*\b|N/A', lineas[i+1])
                         if len(ops) >= 3:
-                            ot_opciones["Nivel 1"] = parse_decimal(ops[0]) if ops[0] != "N/A" else None
-                            ot_opciones["Nivel 2"] = parse_decimal(ops[1]) if ops[1] != "N/A" else None
-                            ot_opciones["Nivel 3"] = parse_decimal(ops[2]) if ops[2] != "N/A" else None
+                            ot_opciones["Nivel 1"] = parse_decimal(ops[0]) if ops[0] != "N/A" else 0.0
+                            ot_opciones["Nivel 2"] = parse_decimal(ops[1]) if ops[1] != "N/A" else 0.0
+                            ot_opciones["Nivel 3"] = parse_decimal(ops[2]) if ops[2] != "N/A" else 0.0
 
             encontrados = set()
             for linea in lineas:
@@ -168,10 +181,12 @@ async def upload_pdf(
                             elif "Nivel 4" in objetivo:
                                 pr_val = pr_opciones["Nivel 4"]
 
+                            nombre_estandar = NIVEL_ESTANDAR.get(objetivo, objetivo)
+
                             # 2. Guardar en Base de Datos por cada fila encontrada, asociándolos al documento
                             nuevo_registro = RegistroTarifario(
                                 documento_id=nuevo_documento.id,
-                                fila=objetivo,
+                                fila=nombre_estandar,
                                 gen=gen_global,
                                 stn=stn_global,
                                 res=res_global,
@@ -189,7 +204,7 @@ async def upload_pdf(
                                 "operador_red": operador_red,
                                 "mes": mes,
                                 "anio": anio,
-                                "fila": objetivo,
+                                "fila": nombre_estandar,
                                 "gen": gen_global, "stn": stn_global, "res": res_global,
                                 "d_val": parse_decimal(numeros[-4]), "c_val": parse_decimal(numeros[-3]),
                                 "cu_val": parse_decimal(numeros[-2]), "cot_val": parse_decimal(numeros[-1]),
@@ -229,6 +244,124 @@ def get_registros(db: Session = Depends(get_db)):
             "ot_val": reg.ot_val
         })
     return resultado
+
+@app.get("/registros-enerbit/")
+def get_registros_enerbit(db: Session = Depends(get_db)):
+    registros = db.query(RegistroTarifarioEnerbit).options(joinedload(RegistroTarifarioEnerbit.documento)).all()
+    resultado = []
+    for reg in registros:
+        doc = reg.documento
+        resultado.append({
+            "operador_red": "enerBit",
+            "or_asociado": doc.operador_red,
+            "mes": doc.mes,
+            "anio": doc.anio,
+            "fila": reg.fila,
+            "gen": reg.gen, "stn": reg.stn, "res": reg.res,
+            "pr_val": reg.pr_val,
+            "d_val": reg.d_val, "c_val": reg.c_val, "cu_val": reg.cu_val, "cot_val": reg.cot_val,
+            "ot_val": reg.ot_val
+        })
+    return resultado
+
+@app.get("/dashboard/resumen")
+def get_resumen(anio: int, operador_red: str = "Afinia", db: Session = Depends(get_db)):
+    """Resumen anual: Diferencia Tarifaria y Favor Cobertura por mes y nivel."""
+    # FijaBit del año
+    params = db.query(ParametrosOperador).filter(
+        ParametrosOperador.anio == anio,
+        ParametrosOperador.operador_red == operador_red
+    ).first()
+    fijabit_hogar = params.fijabit_hogar if params else None
+    fijabit_comercial = params.fijabit_comercial if params else None
+
+    # Documentos del año
+    docs_afinia = db.query(Documento).filter(Documento.operador_red == operador_red, Documento.anio == anio).all()
+    docs_enerbit = db.query(DocumentoEnerbit).filter(DocumentoEnerbit.operador_red == operador_red, DocumentoEnerbit.anio == anio).all()
+
+    # Meses disponibles (unión de ambos)
+    meses_set = set()
+    for d in docs_afinia:
+        meses_set.add(d.mes)
+    for d in docs_enerbit:
+        meses_set.add(d.mes)
+
+    niveles = ["CU1 Prop, OR", "CU12 Prop, Mixta", "CU1 Prop, Cliente", "CU2", "CU3"]
+    resultado = []
+
+    for m in sorted(meses_set):
+        doc_af = next((d for d in docs_afinia if d.mes == m), None)
+        doc_eb = next((d for d in docs_enerbit if d.mes == m), None)
+
+        afinia_map = {}
+        if doc_af:
+            for r in db.query(RegistroTarifario).filter(RegistroTarifario.documento_id == doc_af.id).all():
+                afinia_map[r.fila] = r
+
+        enerbit_map = {}
+        if doc_eb:
+            for r in db.query(RegistroTarifarioEnerbit).filter(RegistroTarifarioEnerbit.documento_id == doc_eb.id).all():
+                enerbit_map[r.fila] = r
+
+        niveles_data = {}
+        for nivel in niveles:
+            af = afinia_map.get(nivel)
+            eb = enerbit_map.get(nivel)
+
+            cot_or = af.cot_val if af else None
+            cot_eb = eb.cot_val if eb else None
+            diferencia = round(cot_or - cot_eb, 2) if cot_or is not None and cot_eb is not None else None
+
+            # Favor Cobertura Hogar = G_eB + C_eB - OT_eB - FijaBit_Hogar
+            favor_hogar = None
+            favor_comercio = None
+            pro_hogar = None
+            pro_comercio = None
+            if eb:
+                g = eb.gen or 0
+                c = eb.c_val or 0
+                ot = eb.ot_val or 0
+                base = round(g + c - ot, 2)
+                if fijabit_hogar is not None:
+                    favor_hogar = round(base - fijabit_hogar, 2)
+                    pro_hogar = round(cot_eb - favor_hogar, 2) if cot_eb is not None else None
+                if fijabit_comercial is not None:
+                    favor_comercio = round(base - fijabit_comercial, 2)
+                    pro_comercio = round(cot_eb - favor_comercio, 2) if cot_eb is not None else None
+
+            # Efecto Contribución = Diferencia Tarifaria * 20%
+            efecto_contribucion = round(diferencia * 0.20, 2) if diferencia is not None else None
+
+            # Neto Cliente = Favor Cobertura + Diferencia Tarifaria - Efecto Contribución
+            neto_hogar = None
+            neto_comercio = None
+            if all(v is not None for v in [favor_hogar, diferencia, efecto_contribucion]):
+                neto_hogar = round(favor_hogar + diferencia - efecto_contribucion, 2)
+            if all(v is not None for v in [favor_comercio, diferencia, efecto_contribucion]):
+                neto_comercio = round(favor_comercio + diferencia - efecto_contribucion, 2)
+
+            niveles_data[nivel] = {
+                "cot_or": cot_or,
+                "cot_eb": cot_eb,
+                "diferencia_tarifaria": diferencia,
+                "efecto_contribucion": efecto_contribucion,
+                "favor_cobertura_hogar": favor_hogar,
+                "favor_cobertura_comercio": favor_comercio,
+                "pro_hogar": pro_hogar,
+                "pro_comercio": pro_comercio,
+                "neto_hogar": neto_hogar,
+                "neto_comercio": neto_comercio
+            }
+
+        resultado.append({"mes": m, "niveles": niveles_data})
+
+    return {
+        "data": resultado,
+        "anio": anio,
+        "operador_red": operador_red,
+        "fijabit_hogar": fijabit_hogar,
+        "fijabit_comercial": fijabit_comercial
+    }
 
 # ENDPOINTS PARA PLAN ENERPRO
 @app.get("/plan-enerpro/parametros")
@@ -279,3 +412,122 @@ def save_cargos_globales(data: CargosGlobalesBase, db: Session = Depends(get_db)
         db.add(record)
     db.commit()
     return {"status": "success"}
+
+# --- EXTRACCION CSV (enerBit) ---
+def parse_decimal_csv(text):
+    """Convierte formato colombiano (punto=miles, coma=decimal) a float."""
+    if text is None:
+        return None
+    text = text.strip()
+    if not text or text == "N/A":
+        return None
+    try:
+        cleaned = text.replace('.', '').replace(',', '.')
+        return float(cleaned)
+    except (ValueError, TypeError):
+        return None
+
+@app.post("/upload-csv/")
+async def upload_csv(
+    file: UploadFile = File(...),
+    operador_red: str = Form(...),
+    mes: int = Form(...),
+    anio: int = Form(...),
+    overwrite: bool = Form(False),
+    db: Session = Depends(get_db)
+):
+    content = await file.read()
+    text = content.decode('latin-1')
+    reader = csv.reader(io.StringIO(text), delimiter=';')
+    rows = list(reader)
+
+    # 1. Extraer T y R
+    t_val = None
+    r_val = None
+    for row in rows:
+        row_text = ';'.join(row)
+        if 'Componentes transversales' in row_text:
+            for i, cell in enumerate(row):
+                if 'T:' in cell:
+                    t_val = parse_decimal_csv(row[i + 1]) if i + 1 < len(row) else None
+                if 'R:' in cell:
+                    r_val = parse_decimal_csv(row[i + 1]) if i + 1 < len(row) else None
+            break
+
+    # 2. Encontrar bloque de Afinia dentro del CSV de enerBit
+    operador_header_row = None
+    for i, row in enumerate(rows):
+        if len(row) > 8 and 'afinia' in row[8].strip().lower():
+            operador_header_row = i
+            break
+    
+    if operador_header_row is None:
+        raise HTTPException(status_code=400, detail="No se encontró la sección de Afinia en el CSV.")
+
+    # 3. Verificar si ya existe para sobreescribir
+    or_asociado = "Afinia"
+    doc_existente = db.query(DocumentoEnerbit).filter(
+        DocumentoEnerbit.operador_red == or_asociado,
+        DocumentoEnerbit.mes == mes,
+        DocumentoEnerbit.anio == anio
+    ).first()
+
+    sobreescrito = False
+    if doc_existente:
+        if not overwrite:
+            raise HTTPException(status_code=409, detail="conflict_existing_record")
+        else:
+            db.delete(doc_existente)
+            db.commit()
+            sobreescrito = True
+
+    # 4. Crear Documento Padre enerBit
+    nuevo_documento = DocumentoEnerbit(
+        filename=file.filename,
+        operador_red=or_asociado,
+        mes=mes,
+        anio=anio
+    )
+    db.add(nuevo_documento)
+    db.flush()
+
+    # 5. Extraer filas de datos y guardar
+    niveles_objetivo = ["CU1 Prop, OR", "CU12 Prop, Mixta", "CU1 Prop, Cliente", "CU2", "CU3"]
+    resultados = []
+    data_start = operador_header_row + 2
+
+    for row in rows[data_start:]:
+        nivel = row[0].strip() if len(row) > 0 else ""
+        if nivel.lower().startswith("mercado"):
+            break
+        if nivel in niveles_objetivo:
+            g_val    = parse_decimal_csv(row[8])  if len(row) > 8  else None
+            d_val    = parse_decimal_csv(row[9])  if len(row) > 9  else None
+            pr_val   = parse_decimal_csv(row[10]) if len(row) > 10 else None
+            c_cot    = parse_decimal_csv(row[11]) if len(row) > 11 else None
+            cu_cot   = parse_decimal_csv(row[12]) if len(row) > 12 else None
+            cot_csv  = parse_decimal_csv(row[13]) if len(row) > 13 else None
+
+            # Transformaciones
+            c_val = round(c_cot - cot_csv, 2) if c_cot is not None and cot_csv is not None else None
+            cu_val = round(cu_cot - cot_csv, 2) if cu_cot is not None and cot_csv is not None else None
+            ot_val = cot_csv
+            cot_val = cu_cot
+
+            nuevo_registro = RegistroTarifarioEnerbit(
+                documento_id=nuevo_documento.id,
+                fila=nivel,
+                gen=g_val, stn=t_val, res=r_val,
+                d_val=d_val, pr_val=pr_val, c_val=c_val,
+                cu_val=cu_val, cot_val=cot_val, ot_val=ot_val
+            )
+            db.add(nuevo_registro)
+
+            resultados.append({
+                "fila": nivel, "gen": g_val, "stn": t_val, "res": r_val,
+                "d_val": d_val, "pr_val": pr_val, "c_val": c_val,
+                "cu_val": cu_val, "cot_val": cot_val, "ot_val": ot_val
+            })
+
+    db.commit()
+    return {"message": "CSV procesado exitosamente", "data": resultados, "sobreescrito": sobreescrito}

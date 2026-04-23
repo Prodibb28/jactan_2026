@@ -74,5 +74,37 @@ class CargosGlobales(Base):
     medida_directa_comercial = Column(Float, nullable=True)
     medida_semi_indirecta_comercial = Column(Float, nullable=True)
 
+# 5. Tabla enerBit: Documento CSV cargado (asociado a un Operador de Red)
+class DocumentoEnerbit(Base):
+    __tablename__ = "documentos_enerbit"
+
+    id = Column(Integer, primary_key=True, index=True)
+    filename = Column(String)
+    operador_red = Column(String, index=True)  # OR al que aplica (Ej. "Afinia")
+    mes = Column(Integer, index=True)
+    anio = Column(Integer, index=True)
+
+    registros = relationship("RegistroTarifarioEnerbit", back_populates="documento", cascade="all, delete-orphan")
+
+# 6. Tabla enerBit: Registros tarifarios extraídos del CSV
+class RegistroTarifarioEnerbit(Base):
+    __tablename__ = "registros_tarifarios_enerbit"
+
+    id = Column(Integer, primary_key=True, index=True)
+    documento_id = Column(Integer, ForeignKey("documentos_enerbit.id"))
+    fila = Column(String)
+
+    gen = Column(Float, nullable=True)
+    stn = Column(Float, nullable=True)
+    res = Column(Float, nullable=True)
+    d_val = Column(Float, nullable=True)
+    c_val = Column(Float, nullable=True)
+    cu_val = Column(Float, nullable=True)
+    cot_val = Column(Float, nullable=True)
+    ot_val = Column(Float, nullable=True)
+    pr_val = Column(Float, nullable=True)
+
+    documento = relationship("DocumentoEnerbit", back_populates="registros")
+
 # Crea las tablas
 Base.metadata.create_all(bind=engine)

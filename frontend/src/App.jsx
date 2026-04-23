@@ -75,6 +75,8 @@ function App() {
   const [simNivel, setSimNivel] = useState("CU1 Prop, OR");
   const [simEstrato, setSimEstrato] = useState("4");
   const [simMercado, setSimMercado] = useState("Hogar");
+  const [simFactor, setSimFactor] = useState("1");
+  const [simEsZC, setSimEsZC] = useState("No");
 
   const fetchRegistros = () => {
     fetch('http://localhost:8000/registros/')
@@ -802,6 +804,7 @@ function App() {
                     placeholder="Ej: 350" 
                     value={simConsumo} 
                     onChange={(e) => setSimConsumo(e.target.value)} 
+                    onBlur={() => { if (simConsumo === "") setSimConsumo("0"); }}
                     style={{paddingLeft: '1rem'}}
                   />
                 </div>
@@ -833,8 +836,36 @@ function App() {
 
               <div className="input-group">
                 <label>Estrato</label>
-                <select value={simEstrato} onChange={(e) => setSimEstrato(e.target.value)} disabled={simMercado === 'Comercial'}>
+                <select value={simEstrato} onChange={(e) => setSimEstrato(e.target.value)} disabled={simMercado === 'Comercial' || simEsZC === 'Sí'}>
                   {[1, 2, 3, 4, 5, 6].map(s => <option key={s} value={s}>Estrato {s}</option>)}
+                </select>
+              </div>
+
+              <div className="input-group">
+                <label>Factor Múltiplo</label>
+                <div className="input-prefix">
+                  <input 
+                    type="number" 
+                    value={simFactor} 
+                    onChange={(e) => setSimFactor(e.target.value)} 
+                    onBlur={() => { if (simFactor === "") setSimFactor("1"); }}
+                    style={{paddingLeft: '1rem'}}
+                  />
+                </div>
+                <p className="text-muted" style={{fontSize: '0.7rem', marginTop: '0.2rem'}}>
+                  {simFactor === 1 ? "✓ Medida Directa" : simFactor > 80 ? "✓ Medida Semi/Indirecta" : "—"}
+                </p>
+              </div>
+
+              <div className="input-group">
+                <label>¿Es Zona Común?</label>
+                <select 
+                  value={simEsZC} 
+                  onChange={(e) => setSimEsZC(e.target.value)}
+                  disabled={simMercado === 'Comercial'}
+                >
+                  <option value="No">No</option>
+                  <option value="Sí">Sí</option>
                 </select>
               </div>
             </div>
@@ -857,34 +888,52 @@ function App() {
                           <tr>
                             <th style={{textAlign: 'left'}}>Mes</th>
                             <th>Tarifa {dashOR}</th>
-                            <th>Contrib. {dashOR}</th>
                             <th>Total {dashOR}</th>
                             <th>Tarifa enerBit</th>
-                            <th>Contrib. enerBit</th>
+                            <th>Cargo enerPro</th>
                             <th>Total enerBit</th>
                           </tr>
                         </thead>
                         <tbody>
                           {dashData.sort((a, b) => a.mes - b.mes).map((m, idx) => {
                             const d = m.niveles?.[simNivel] || {};
-                            const paysContribution = simMercado === "Comercial" || parseInt(simEstrato) >= 5;
+                            
+                            // Lógica de Contribución y Mercado
+                            // Ajuste: Si es Comercial, ignoramos ZC
+                            const actualMercado = simMercado === "Comercial" ? "Comercial" : (simEsZC === "Sí" ? "Hogar" : "Hogar");
+                            // Wait, the logic should be: if ZC is YES and Mercado is NOT Comercial (already disabled but for safety)...
+                            const isIndustrial = simMercado === "Comercial";
+                            const isZC = !isIndustrial && simEsZC === "Sí";
+                            
+                            const paysContribution = isIndustrial || (!isZC && parseInt(simEstrato) >= 5);
                             const taxRate = paysContribution ? 0.20 : 0.0;
                             
+                            // Cargos Globales enerPro
+                            let cargoFijo = 0;
+                            const factorNum = parseFloat(simFactor) || 0;
+                            const isIndirect = factorNum >= 80;
+
+                            if (isZC) {
+                                cargoFijo = isIndirect ? (parseFloat(medidaSemiIndirectaZc) || 0) : (parseFloat(medidaDirectaZc) || 0);
+                            } else {
+                                if (isIndustrial) {
+                                    cargoFijo = isIndirect ? (parseFloat(medidaSemiIndirectaComercial) || 0) : (parseFloat(medidaDirectaComercial) || 0);
+                                } else {
+                                    cargoFijo = parseFloat(medidaDirectaHogar) || 0; 
+                                }
+                            }
+
                             const tarifaOR = d.cot_or || 0;
-                            const tarifaEB = simMercado === "Hogar" ? (d.pro_hogar || 0) : (d.pro_comercio || 0);
+                            const tarifaEB = isIndustrial ? (d.pro_comercio || 0) : (d.pro_hogar || 0);
                             
                             const hasDataEB = tarifaEB > 0;
                             
                             const subtotalOR = tarifaOR * consumo;
                             const subtotalEB = hasDataEB ? tarifaEB * consumo : 0;
                             
-                            const taxOR = subtotalOR * taxRate;
-                            const taxEB = hasDataEB ? subtotalEB * taxRate : 0;
-                            
-                            const totalOR = subtotalOR + taxOR;
-                            const totalEB = hasDataEB ? subtotalEB + taxEB : 0;
+                            const totalOR = subtotalOR * (1 + taxRate);
+                            const totalEB = hasDataEB ? (subtotalEB * (1 + taxRate)) + cargoFijo : 0;
                             const ahorro = hasDataEB ? totalOR - totalEB : null;
-                            const pctAhorro = (hasDataEB && totalOR > 0) ? (ahorro / totalOR) * 100 : null;
                             
                             return (
                               <tr key={idx}>
@@ -892,11 +941,10 @@ function App() {
                                   {meses.find(mes => mes.num === m.mes)?.name}
                                 </td>
                                 <td>{fmt(tarifaOR)}</td>
-                                <td className="text-muted">{currency(taxOR)}</td>
                                 <td className="text-muted">{currency(totalOR)}</td>
                                 
                                 <td className={`text-enerbit font-bold ${!hasDataEB ? 'text-muted' : ''}`}>{hasDataEB ? fmt(tarifaEB) : "Sin datos"}</td>
-                                <td className="text-enerbit">{hasDataEB ? currency(taxEB) : "—"}</td>
+                                <td className="text-enerbit">{hasDataEB ? currency(cargoFijo) : "—"}</td>
                                 <td className="font-bold text-dark">{hasDataEB ? currency(totalEB) : "—"}</td>
                               </tr>
                             );
@@ -904,18 +952,23 @@ function App() {
                         </tbody>
                         {dashData.filter(m => {
                            const d = m.niveles?.[simNivel] || {};
-                           const tarifaEB = simMercado === "Hogar" ? (d.pro_hogar || 0) : (d.pro_comercio || 0);
+                           const isIndustrial = simMercado === "Comercial";
+                           const tarifaEB = isIndustrial ? (d.pro_comercio || 0) : (d.pro_hogar || 0);
                            return tarifaEB > 0;
                         }).length > 0 && (
                            <tfoot>
                               <tr style={{background: '#f8fafc', fontWeight: '900', borderTop: '2px solid var(--primary)'}}>
-                                 <td colSpan="3" style={{textAlign: 'right', padding: '1.2rem', color: 'var(--primary)'}}>TOTAL ACUMULADO</td>
+                                 <td colSpan="2" style={{textAlign: 'right', padding: '1.2rem', color: 'var(--primary)'}}>TOTAL ACUMULADO</td>
                                  <td className="text-muted">
                                     {currency(dashData.reduce((acc, m) => {
                                        const d = m.niveles?.[simNivel] || {};
-                                       const tarifaEB = simMercado === "Hogar" ? (d.pro_hogar || 0) : (d.pro_comercio || 0);
+                                       const isIndustrial = simMercado === "Comercial";
+                                       const isZC = !isIndustrial && simEsZC === "Sí";
+                                       const tarifaEB = isIndustrial ? (d.pro_comercio || 0) : (d.pro_hogar || 0);
                                        if (tarifaEB <= 0) return acc;
-                                       const taxRate = (simMercado === "Comercial" || parseInt(simEstrato) >= 5) ? 0.20 : 0.0;
+                                       
+                                       const paysContribution = isIndustrial || (!isZC && parseInt(simEstrato) >= 5);
+                                       const taxRate = paysContribution ? 0.20 : 0.0;
                                        return acc + ((d.cot_or || 0) * consumo * (1 + taxRate));
                                     }, 0))}
                                  </td>
@@ -923,10 +976,23 @@ function App() {
                                  <td className="text-dark">
                                     {currency(dashData.reduce((acc, m) => {
                                        const d = m.niveles?.[simNivel] || {};
-                                       const tarifaEB = simMercado === "Hogar" ? (d.pro_hogar || 0) : (d.pro_comercio || 0);
+                                       const isIndustrial = simMercado === "Comercial";
+                                       const isZC = !isIndustrial && simEsZC === "Sí";
+                                       const tarifaEB = isIndustrial ? (d.pro_comercio || 0) : (d.pro_hogar || 0);
                                        if (tarifaEB <= 0) return acc;
-                                       const taxRate = (simMercado === "Comercial" || parseInt(simEstrato) >= 5) ? 0.20 : 0.0;
-                                       return acc + (tarifaEB * consumo * (1 + taxRate));
+                                       
+                                       const paysContribution = isIndustrial || (!isZC && parseInt(simEstrato) >= 5);
+                                       const taxRate = paysContribution ? 0.20 : 0.0;
+                                       
+                                       let cargoFijo = 0;
+                                       const factorNum = parseFloat(simFactor) || 0;
+                                       const isIndirect = factorNum >= 80;
+
+                                       if (isZC) cargoFijo = isIndirect ? (parseFloat(medidaSemiIndirectaZc) || 0) : (parseFloat(medidaDirectaZc) || 0);
+                                       else if (isIndustrial) cargoFijo = isIndirect ? (parseFloat(medidaSemiIndirectaComercial) || 0) : (parseFloat(medidaDirectaComercial) || 0);
+                                       else cargoFijo = parseFloat(medidaDirectaHogar) || 0;
+                                       
+                                       return acc + (tarifaEB * consumo * (1 + taxRate)) + cargoFijo;
                                     }, 0))}
                                  </td>
                               </tr>
@@ -944,17 +1010,35 @@ function App() {
                       <p style={{color: '#15803d', margin: '0.3rem 0 0 0', fontSize: '1rem', lineHeight: '1.4'}}>
                         Basado en el análisis de los meses con datos, el cliente ahorraría un promedio mensual de <strong style={{fontSize: '1.2rem'}}>{currency(dashData.filter(m => {
                            const d = m.niveles?.[simNivel] || {};
-                           const tarifaEB = simMercado === "Hogar" ? (d.pro_hogar || 0) : (d.pro_comercio || 0);
+                           const isIndustrial = simMercado === "Comercial";
+                           const tarifaEB = isIndustrial ? (d.pro_comercio || 0) : (d.pro_hogar || 0);
                            return tarifaEB > 0;
                         }).reduce((acc, m) => {
                            const d = m.niveles?.[simNivel] || {};
-                           const taxRate = (simMercado === "Comercial" || parseInt(simEstrato) >= 5) ? 0.20 : 0.0;
+                           const isIndustrial = simMercado === "Comercial";
+                           const isZC = !isIndustrial && simEsZC === "Sí";
+                           const paysContribution = isIndustrial || (!isZC && parseInt(simEstrato) >= 5);
+                           const taxRate = paysContribution ? 0.20 : 0.0;
+                           
                            const tarifaOR = d.cot_or || 0;
-                           const tarifaEB = simMercado === "Hogar" ? (d.pro_hogar || 0) : (d.pro_comercio || 0);
-                           return acc + ((tarifaOR - tarifaEB) * consumo * (1 + taxRate));
+                           const tarifaEB = isIndustrial ? (d.pro_comercio || 0) : (d.pro_hogar || 0);
+                           
+                           const subtotalOR = (tarifaOR * consumo) * (1 + taxRate);
+                           
+                           let cargoFijo = 0;
+                           const factorNum = parseFloat(simFactor) || 0;
+                           const isIndirect = factorNum >= 80;
+
+                           if (isZC) cargoFijo = isIndirect ? (parseFloat(medidaSemiIndirectaZc) || 0) : (parseFloat(medidaDirectaZc) || 0);
+                           else if (isIndustrial) cargoFijo = isIndirect ? (parseFloat(medidaSemiIndirectaComercial) || 0) : (parseFloat(medidaDirectaComercial) || 0);
+                           else cargoFijo = parseFloat(medidaDirectaHogar) || 0;
+
+                           const subtotalEB = (tarifaEB * consumo * (1 + taxRate)) + cargoFijo;
+                           return acc + (subtotalOR - subtotalEB);
                         }, 0) / (dashData.filter(m => {
                            const d = m.niveles?.[simNivel] || {};
-                           const tarifaEB = simMercado === "Hogar" ? (d.pro_hogar || 0) : (d.pro_comercio || 0);
+                           const isIndustrial = simMercado === "Comercial";
+                           const tarifaEB = isIndustrial ? (d.pro_comercio || 0) : (d.pro_hogar || 0);
                            return tarifaEB > 0;
                         }).length || 1))}</strong>.
                       </p>
@@ -962,17 +1046,33 @@ function App() {
                          ⚡️ Ahorro estimado del {(() => {
                            const totalOR = dashData.reduce((acc, m) => {
                               const d = m.niveles?.[simNivel] || {};
-                              const tarifaEB = simMercado === "Hogar" ? (d.pro_hogar || 0) : (d.pro_comercio || 0);
+                              const isIndustrial = simMercado === "Comercial";
+                              const isZC = !isIndustrial && simEsZC === "Sí";
+                              const tarifaEB = isIndustrial ? (d.pro_comercio || 0) : (d.pro_hogar || 0);
                               if (tarifaEB <= 0) return acc;
-                              const taxRate = (simMercado === "Comercial" || parseInt(simEstrato) >= 5) ? 0.20 : 0.0;
+                              const paysContribution = isIndustrial || (!isZC && parseInt(simEstrato) >= 5);
+                              const taxRate = paysContribution ? 0.20 : 0.0;
                               return acc + ((d.cot_or || 0) * consumo * (1 + taxRate));
                            }, 0);
                            const totalEB = dashData.reduce((acc, m) => {
                               const d = m.niveles?.[simNivel] || {};
-                              const tarifaEB = simMercado === "Hogar" ? (d.pro_hogar || 0) : (d.pro_comercio || 0);
+                              const isIndustrial = simMercado === "Comercial";
+                              const isZC = !isIndustrial && simEsZC === "Sí";
+                              const tarifaEB = isIndustrial ? (d.pro_comercio || 0) : (d.pro_hogar || 0);
                               if (tarifaEB <= 0) return acc;
-                              const taxRate = (simMercado === "Comercial" || parseInt(simEstrato) >= 5) ? 0.20 : 0.0;
-                              return acc + (tarifaEB * consumo * (1 + taxRate));
+                              
+                              const paysContribution = isIndustrial || (!isZC && parseInt(simEstrato) >= 5);
+                              const taxRate = paysContribution ? 0.20 : 0.0;
+                              
+                              let cargoFijo = 0;
+                              const factorNum = parseFloat(simFactor) || 0;
+                              const isIndirect = factorNum >= 80;
+
+                              if (isZC) cargoFijo = isIndirect ? (parseFloat(medidaSemiIndirectaZc) || 0) : (parseFloat(medidaDirectaZc) || 0);
+                              else if (isIndustrial) cargoFijo = isIndirect ? (parseFloat(medidaSemiIndirectaComercial) || 0) : (parseFloat(medidaDirectaComercial) || 0);
+                              else cargoFijo = parseFloat(medidaDirectaHogar) || 0;
+                              
+                              return acc + (tarifaEB * consumo * (1 + taxRate)) + cargoFijo;
                            }, 0);
                            return totalOR > 0 ? (((totalOR - totalEB) / totalOR) * 100).toFixed(1) : "0";
                         })()}% sobre facturación actual

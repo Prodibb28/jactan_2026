@@ -9,6 +9,7 @@ import aiofiles
 from database import SessionLocal, Documento, RegistroTarifario, ParametrosOperador, CargosGlobales
 from pydantic import BaseModel
 from typing import Optional
+from routes.invoices import router as invoices_router
 
 class ParametrosOperadorBase(BaseModel):
     operador_red: str
@@ -25,6 +26,8 @@ class CargosGlobalesBase(BaseModel):
     medida_semi_indirecta_comercial: Optional[float] = None
 
 app = FastAPI()
+
+app.include_router(invoices_router)
 
 app.add_middleware(
     CORSMiddleware,

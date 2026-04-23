@@ -31,4 +31,5 @@ dependencies = [
     "typing_extensions==4.15.0",
     "types-psycopg2>=2.9.21.20250516",
     "uvicorn==0.39.0",
+    "openai>=1.0.0",
 ]

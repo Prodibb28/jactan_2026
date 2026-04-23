@@ -98,6 +98,11 @@ function App() {
     setInvoiceLoading(true);
     setInvoiceResult(null);
     setInvoiceError(null);
+    setSimConsumo("");
+    setSimNivel("")
+    setSimMercado("");
+    setSimEstrato("");
+    setSimFactor("")
     const formData = new FormData();
     formData.append('file', selectedFile);
     try {
@@ -870,34 +875,37 @@ function App() {
                 <div className="input-prefix">
                   <input 
                     type="number"
+                    className="input"
                     placeholder="Ej: 350"
                     value={simConsumo}
                     onChange={(e) => setSimConsumo(e.target.value)} 
                     onBlur={() => { if (simConsumo === "") setSimConsumo("0"); }}
-                    style={{paddingLeft: '1rem'}}
+                    style={{paddingLeft: '1rem', width: '100%'}}
                   />
                 </div>
               </div>
 
               <div className="input-group">
                 <label>Nivel de Tensión / Propiedad</label>
-                <select value={simNivel} onChange={(e) => setSimNivel(e.target.value)}>
+                <select className='input' style={{width: '100%'}} value={simNivel} onChange={(e) => setSimNivel(e.target.value)}>
                   {niveles.map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
               </div>
 
               <div className="input-group">
                 <label>Vigencia (Año)</label>
-                <select value={dashAnio} onChange={(e) => setDashAnio(e.target.value)}>
+                <select className='input' value={dashAnio} style={{width: '100%'}} onChange={(e) => setDashAnio(e.target.value)}>
                   {Array.from({ length: 31 }, (_, i) => 2015 + i).map(y => (
                     <option key={y} value={y}>{y}</option>
                   ))}
                 </select>
               </div>
+            </div>
 
+            <div className='metadata-container'>
               <div className="input-group">
                 <label>Mercado</label>
-                <select value={simMercado} onChange={(e) => setSimMercado(e.target.value)}>
+                <select className='input' value={simMercado} style={{width: '100%'}} onChange={(e) => setSimMercado(e.target.value)}>
                   <option value="Hogar">🏠 Residencial (Hogar)</option>
                   <option value="Comercial">🏢 Comercial / Industrial</option>
                 </select>
@@ -905,7 +913,7 @@ function App() {
 
               <div className="input-group">
                 <label>Estrato</label>
-                <select value={simEstrato} onChange={(e) => setSimEstrato(e.target.value)} disabled={simMercado === 'Comercial' || simEsZC === 'Sí'}>
+                <select className='input' value={simEstrato} style={{width: '100%'}} onChange={(e) => setSimEstrato(e.target.value)} disabled={simMercado === 'Comercial' || simEsZC === 'Sí'}>
                   {[1, 2, 3, 4, 5, 6].map(s => <option key={s} value={s}>Estrato {s}</option>)}
                 </select>
               </div>
@@ -915,21 +923,21 @@ function App() {
                 <div className="input-prefix">
                   <input 
                     type="number" 
-                    value={simFactor} 
+                    value={simFactor}
+                    className='input'
                     onChange={(e) => setSimFactor(e.target.value)} 
                     onBlur={() => { if (simFactor === "") setSimFactor("1"); }}
-                    style={{paddingLeft: '1rem'}}
+                    style={{paddingLeft: '1rem', width: '100%'}}
                   />
                 </div>
-                <p className="text-muted" style={{fontSize: '0.7rem', marginTop: '0.2rem'}}>
-                  {simFactor === 1 ? "✓ Medida Directa" : simFactor > 80 ? "✓ Medida Semi/Indirecta" : "—"}
-                </p>
               </div>
 
               <div className="input-group">
                 <label>¿Es Zona Común?</label>
-                <select 
-                  value={simEsZC} 
+                <select
+                  value={simEsZC}
+                  className='input'
+                  style={{width: '100%'}}
                   onChange={(e) => setSimEsZC(e.target.value)}
                   disabled={simMercado === 'Comercial'}
                 >
@@ -938,6 +946,10 @@ function App() {
                 </select>
               </div>
             </div>
+
+            <p className="text-muted" style={{fontSize: '0.7rem', marginTop: '0.2rem'}}>
+              {simFactor === 1 ? "✓ Medida Directa" : simFactor > 80 ? "✓ Medida Semi/Indirecta" : ""}
+            </p>
 
             {consumo > 0 ? (
               <div className="grouped-documents-list" style={{marginTop: '2rem'}}>
@@ -1150,11 +1162,21 @@ function App() {
                 </div>
               </div>
             ) : (
+              invoiceLoading ? (
+                <div className="construction-view" style={{ height: '300px', gap: '1rem' }}>
+                  <span
+                    className="loader"
+                    style={{ width: '32px', height: '32px', borderTopColor: '#3b82f6', borderColor: 'rgba(59, 130, 246, 0.2)' }}
+                  ></span>
+                  <p>Analizando factura y generando la simulación...</p>
+                </div>
+              ) : (
               <div className="construction-view" style={{height: '300px'}}>
                 <svg className="cog-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
                 <p>Ingresa el consumo mensual para generar la simulación.</p>
               </div>
-            )}
+            )
+            ) }
           </section>
         </div>
       );

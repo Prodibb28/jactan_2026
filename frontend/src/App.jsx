@@ -1,5 +1,13 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import './App.css';
+
+const TENSION_LEVELS = {
+  "OR": "CU1 Prop, OR",
+  "MIXTA": "CU12 Prop, Mixta",
+  "CLIENTE": "CU1 Prop, Cliente",
+  "N2": "CU2",
+  "N3": "CU3",
+}
 
 function App() {
   const [activeTab, setActiveTab] = useState('upload'); // 'upload', 'resumen', 'config'
@@ -75,6 +83,40 @@ function App() {
   const [simNivel, setSimNivel] = useState("CU1 Prop, OR");
   const [simEstrato, setSimEstrato] = useState("4");
   const [simMercado, setSimMercado] = useState("Hogar");
+
+  // Estados extractor de factura
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [invoiceResult, setInvoiceResult] = useState(null);
+  const [invoiceError, setInvoiceError] = useState(null);
+  const invoiceInputRef = useRef(null);
+
+  const handleInvoiceExtract = async (e) => {
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
+    setInvoiceLoading(true);
+    setInvoiceResult(null);
+    setInvoiceError(null);
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    try {
+      const res = await fetch('http://localhost:8000/invoice-extractor', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+      const json = await res.json();
+      setInvoiceResult(json);
+      setSimConsumo(json.consumo_mes_anterior_kwh || "");
+      setSimNivel(TENSION_LEVELS[json.propiedad_activo?.toUpperCase()] || "")
+      setSimMercado(json.tipo_cliente === "residencial" ? "Hogar" : "Comercial");
+      setSimEstrato(json.estrato_clasificacion || "");
+    } catch (err) {
+      setInvoiceError(err.message);
+    } finally {
+      setInvoiceLoading(false);
+      e.target.value = '';
+    }
+  };
 
   const fetchRegistros = () => {
     fetch('http://localhost:8000/registros/')
@@ -788,19 +830,45 @@ function App() {
       return (
         <div className="tab-content fade-in">
           <div className="module-title">
-            <h2>Simulación de Propuesta Comercial</h2>
+            <div style={{display: "flex", justifyContent: "space-between"}}>
+              <h2>Simulación de Propuesta Comercial</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <input
+                  ref={invoiceInputRef}
+                  type="file"
+                  accept=".pdf"
+                  style={{ display: 'none' }}
+                  onChange={handleInvoiceExtract}
+                />
+                <button
+                  className="btn btn-outline"
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', padding: '0.5rem 1rem' }}
+                  onClick={() => invoiceInputRef.current?.click()}
+                  disabled={invoiceLoading}
+                >
+                  {invoiceLoading ? (
+                    <span className="loader" style={{ width: '14px', height: '14px' }}></span>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                  )}
+                  Analizar Factura
+                </button>
+                {invoiceError && <span style={{ fontSize: '0.8rem', color: '#dc2626' }}>Error: {invoiceError}</span>}
+              </div>
+            </div>
             <p className="text-subtitle">Proyecta el ahorro potencial del cliente basado en su consumo real y las tarifas vigentes.</p>
           </div>
 
           <section className="upload-section fade-in">
+
             <div className="metadata-container">
               <div className="input-group">
                 <label>Consumo Promedio Mensual (kWh)</label>
                 <div className="input-prefix">
                   <input 
-                    type="number" 
-                    placeholder="Ej: 350" 
-                    value={simConsumo} 
+                    type="number"
+                    placeholder="Ej: 350"
+                    value={simConsumo}
                     onChange={(e) => setSimConsumo(e.target.value)} 
                     style={{paddingLeft: '1rem'}}
                   />
@@ -1042,7 +1110,6 @@ function App() {
                {activeTab === 'resumen' && "Visualizador Global"}
                {activeTab === 'config' && "Simulador de Propuestas"}
              </h1>
-             <div className="header-user">Gestor Tarifario</div>
            </div>
         </header>
 

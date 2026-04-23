@@ -112,6 +112,7 @@ function App() {
       setSimNivel(TENSION_LEVELS[json.propiedad_activo?.toUpperCase()] || "")
       setSimMercado(json.tipo_cliente === "residencial" ? "Hogar" : "Comercial");
       setSimEstrato(json.estrato_clasificacion || "");
+      setSimFactor(json.factor_multiplo || "")
     } catch (err) {
       setInvoiceError(err.message);
     } finally {

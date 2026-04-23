@@ -81,7 +81,8 @@ async def invoice_extractor(file: UploadFile = File(...)):
                                     "CU": number
                                 },
                                 "tipo_cliente": string,
-                                "factor_multiplo": number
+                                "factor_multiplo": number,
+                                "propiedad_activo": string
                             }
 
                             Field extraction rules:
@@ -105,7 +106,7 @@ async def invoice_extractor(file: UploadFile = File(...)):
                             - CU (Costo Unitario total)
                             All values should be numbers (decimals allowed).
 
-                            Return ONLY the JSON object, no explanation, no markdown, no extra text.
+                            Return ONLY the JSON object, no explanation, no markdown, no extra text, no "JSON" text.
                             If a field cannot be found, set its value to null.
 
                             5. "direccion": Extract the full address from the "Dirección de suministro" field in the user data section
@@ -113,6 +114,7 @@ async def invoice_extractor(file: UploadFile = File(...)):
                             7. "promedio_consumo_diario_kwh": Extract from "Promedio consumo diario" and return it as a number (remove "kWh" and any formatting).
                             8. "tipo_cliente": from the "Estrato/Clasificación" field, if it contains the word "Resid" classify as "residencial", if not classify as "comercial"
                             9. "factor_multiplo": from the "Factor Múltiplo"
+                            10. "propiedad_activo": Extract the value next to "Propiedad del Activo"
                         """,
                     },
                 ],
